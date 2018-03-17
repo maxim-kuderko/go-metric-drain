@@ -40,11 +40,6 @@ func (mr *MetricReporter) Send(name string, val int64, tags map[string]string) {
 }
 
 func (mr *MetricReporter) Wait() bool {
-	mr.shutdown()
-	return true
-}
-
-func (mr *MetricReporter) shutdown() {
 	wg := sync.WaitGroup{}
 	for _, v := range mr.metricsMap {
 		wg.Add(1)
@@ -54,4 +49,5 @@ func (mr *MetricReporter) shutdown() {
 		}()
 	}
 	wg.Wait()
+	return true
 }
