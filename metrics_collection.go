@@ -54,20 +54,27 @@ func (mc *MetricsCollection) calcHash() {
 
 func (mc *MetricsCollection) merge(newMc *MetricsCollection) {
 	mc.Lock()
-	defer mc.Unlock()
 	mc.points = append(mc.points, newMc.points...)
+	if len(mc.points) >= mc.maxMetrics{
+		mc.Unlock()
+		mc.flush()
+	}else{
+		mc.Unlock()
+	}
 }
 
 func (mc *MetricsCollection) flushTime() {
 	for {
 		<-time.After(time.Second)
 		func(){
-			if time.Since(mc.birthTime).Seconds() < mc.interval || (time.Since(mc.birthTime).Seconds() > mc.interval &&  len(mc.points) > mc.maxMetrics){
-				return
+			mc.Lock()
+			if time.Since(mc.birthTime).Seconds() > mc.interval && len(mc.points) != 0{
+				mc.Unlock()
+				mc.flush()
+			}else{
+				mc.Unlock()
 			}
-			mc.flush()
 		}()
-
 	}
 }
 
