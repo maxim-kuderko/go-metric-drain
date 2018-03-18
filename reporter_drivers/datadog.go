@@ -1,15 +1,68 @@
 package reporter_drivers
 
-import "log"
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"io/ioutil"
+	"log"
+)
 
 type DatadogDriver struct {
 	url string
 }
 
+type datadogSeries struct {
+	Series []*datadogMetric `json:"series"`
+}
+type datadogMetric struct {
+	Metric string     `json:"metric"`
+	Points [][2]int64 `json:"points"`
+	Tags   []string   `json:"tags"`
+}
+
 func NewDatadogDriver(apiKey string) *DatadogDriver {
-	return &DatadogDriver{url: "https://app.datadoghq.com/api/v1/events?api_key=" + apiKey}
+	return &DatadogDriver{url: "https://app.datadoghq.com/api/v1/series?api_key=" + apiKey}
 }
 
 func (dd *DatadogDriver) Send(name string, Points [][2]int64, tags map[string]string) {
-	log.Println("SENDING TO DATADOG: ", name, len(Points), tags)
+	jsonData := dd.jsonify(name, Points, tags)
+
+	req, err := http.NewRequest("POST", dd.url, bytes.NewBuffer(jsonData))
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Println(err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 202{
+		fmt.Println("response Status:", resp.Status)
+		fmt.Println("response Headers:", resp.Header)
+		body, _ := ioutil.ReadAll(resp.Body)
+		fmt.Println("response Body:", string(body))
+	}
+
+}
+
+func (dd *DatadogDriver) jsonify(name string, Points [][2]int64, tags map[string]string) []byte {
+	tv := func() [] string {
+		output := make([]string, 0, len(tags))
+		for _, v := range tags {
+			output = append(output, v)
+		}
+		return output
+	}()
+	dm := datadogMetric{
+		Metric: name,
+		Points: Points,
+		Tags:   tv,
+	}
+	ds := datadogSeries{Series: []*datadogMetric{&dm}}
+	b, _ := json.Marshal(ds)
+	return b
+
 }
