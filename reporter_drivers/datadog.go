@@ -44,6 +44,7 @@ func (dd *DatadogDriver) Send(name string, Points [][2]int64, tags map[string]st
 		fmt.Println("response Headers:", resp.Header)
 		body, _ := ioutil.ReadAll(resp.Body)
 		fmt.Println("response Body:", string(body))
+		fmt.Println("Tried to send ", len(Points), " to Datadog")
 	}
 
 }

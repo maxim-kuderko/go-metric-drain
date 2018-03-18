@@ -11,8 +11,9 @@ type MetricReporter struct {
 	open       bool
 	interval   float64
 	maxMetrics int
-	prefix string
-	isStub bool
+	prefix     string
+	isStub     bool
+	cq         chan *MetricsCollection
 	sync.RWMutex
 }
 
@@ -22,24 +23,42 @@ func NewMetricsReporter(driver reporter_drivers.DriverInterface, interval float6
 		metricsMap: map[string]*MetricsCollection{},
 		interval:   interval,
 		maxMetrics: maxMetrics,
-		prefix: prefix,
+		prefix:     prefix,
+		isStub:     isStub,
+		cq:         make(chan *MetricsCollection, 500),
 	}
+	go func() { mc.addCollections() }()
 	return mc
 }
 
 func (mr *MetricReporter) Send(name string, val int64, tags map[string]string) {
 	metric := newMetricsCollection(mr.prefix+"."+name, val, tags, mr.interval, mr.maxMetrics, mr.driver, mr.isStub)
-	mr.RLock()
+	mr.RWMutex.RLock()
+	defer mr.RUnlock()
 	v, ok := mr.metricsMap[metric.hash]
 	if !ok {
-		mr.RUnlock()
-		mr.Lock()
-		mr.metricsMap[metric.hash] = metric
-		mr.Unlock()
-		go func() { metric.flushTime() }()
+		mr.cq <- metric
 		return
 	}
 	v.merge(metric)
+}
+
+func (mr *MetricReporter) addCollections() {
+	for {
+		mc := <-mr.cq
+		func() {
+			mr.RWMutex.Lock()
+			defer mr.RWMutex.Unlock()
+			v, ok := mr.metricsMap[mc.hash]
+			if !ok {
+				mr.metricsMap[mc.hash] = mc
+				go func() { mc.flushTime() }()
+				return
+			}
+			v.merge(mc)
+		}()
+
+	}
 }
 
 func (mr *MetricReporter) Wait() bool {
