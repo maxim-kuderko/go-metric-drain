@@ -37,7 +37,9 @@ func (mr *MetricReporter) Send(name string, val int64, tags map[string]string) {
 	defer mr.RUnlock()
 	v, ok := mr.metricsMap[metric.hash]
 	if !ok {
-		mr.cq <- metric
+		go func() {
+			mr.cq <- metric
+		}()
 		return
 	}
 	v.merge(metric)
@@ -55,7 +57,9 @@ func (mr *MetricReporter) addCollections() {
 				go func() { mc.flushTime() }()
 				return
 			}
-			v.merge(mc)
+			go func(){
+				v.merge(mc)
+			}()
 		}()
 
 	}
