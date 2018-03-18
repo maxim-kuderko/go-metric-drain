@@ -19,7 +19,7 @@ type datadogSeries struct {
 type datadogMetric struct {
 	Metric string     `json:"metric"`
 	Points [][2]int64 `json:"points"`
-	Tags   []string   `json:"tags"`
+	Tags   []string   `json:"tags,omitempty"`
 }
 
 func NewDatadogDriver(apiKey string) *DatadogDriver {
@@ -49,10 +49,14 @@ func (dd *DatadogDriver) Send(name string, Points [][2]int64, tags map[string]st
 }
 
 func (dd *DatadogDriver) jsonify(name string, Points [][2]int64, tags map[string]string) []byte {
-	tv := func() [] string {
+	tv := func() []string {
 		output := make([]string, 0, len(tags))
-		for _, v := range tags {
-			output = append(output, v)
+		if len(tags) == 0{
+			output = nil
+			return output
+		}
+		for k, v := range tags {
+			output = append(output,k+"_"+v)
 		}
 		return output
 	}()

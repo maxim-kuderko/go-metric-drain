@@ -19,10 +19,11 @@ type MetricsCollection struct {
 	maxMetrics int
 	birthTime  time.Time
 	driver     reporter_drivers.DriverInterface
+	isStub     bool
 	sync.Mutex
 }
 
-func newMetricsCollection(name string, point int64, tags map[string]string, interval float64, maxMetrics int, driver reporter_drivers.DriverInterface) *MetricsCollection {
+func newMetricsCollection(name string, point int64, tags map[string]string, interval float64, maxMetrics int, driver reporter_drivers.DriverInterface, isStub bool) *MetricsCollection {
 	pt := [2]int64{time.Now().Unix(), point}
 	r := MetricsCollection{
 		name:       name,
@@ -32,6 +33,7 @@ func newMetricsCollection(name string, point int64, tags map[string]string, inte
 		maxMetrics: maxMetrics,
 		birthTime:  time.Now(),
 		driver:     driver,
+		isStub:     isStub,
 	}
 	r.calcHash()
 	return &r
@@ -40,15 +42,18 @@ func newMetricsCollection(name string, point int64, tags map[string]string, inte
 func (mc *MetricsCollection) calcHash() {
 	hasher := md5.New()
 	io.WriteString(hasher, mc.name)
-	d := make([]string, 0, len(mc.tags)*2)
-	for k, v := range mc.tags {
-		d = append(d, k)
-		d = append(d, v)
+	if mc.tags !=nil{
+		d := make([]string, 0, len(mc.tags)*2)
+		for k, v := range mc.tags {
+			d = append(d, k)
+			d = append(d, v)
+		}
+		sort.Strings(d)
+		for _, v := range d {
+			io.WriteString(hasher, v)
+		}
 	}
-	sort.Strings(d)
-	for _, v := range d {
-		io.WriteString(hasher, v)
-	}
+
 	mc.hash = hex.EncodeToString(hasher.Sum(nil))
 }
 
@@ -84,7 +89,10 @@ func (mc *MetricsCollection) flush() {
 
 	pointsToSend := mc.points
 	go func() {
-		mc.driver.Send(mc.name, pointsToSend, mc.tags)
+		if !mc.isStub {
+			mc.driver.Send(mc.name, pointsToSend, mc.tags)
+		}
+		pointsToSend = nil
 	}()
 
 	mc.points = [][2]int64{}

@@ -11,21 +11,24 @@ type MetricReporter struct {
 	open       bool
 	interval   float64
 	maxMetrics int
+	prefix string
+	isStub bool
 	sync.RWMutex
 }
 
-func NewMetricsReporter(driver reporter_drivers.DriverInterface, interval float64, maxMetrics int) *MetricReporter {
+func NewMetricsReporter(driver reporter_drivers.DriverInterface, interval float64, maxMetrics int, prefix string, isStub bool) *MetricReporter {
 	mc := &MetricReporter{
 		driver:     driver,
 		metricsMap: map[string]*MetricsCollection{},
 		interval:   interval,
 		maxMetrics: maxMetrics,
+		prefix: prefix,
 	}
 	return mc
 }
 
 func (mr *MetricReporter) Send(name string, val int64, tags map[string]string) {
-	metric := newMetricsCollection(name, val, tags, mr.interval, mr.maxMetrics, mr.driver)
+	metric := newMetricsCollection(mr.prefix+"."+name, val, tags, mr.interval, mr.maxMetrics, mr.driver, mr.isStub)
 	mr.RLock()
 	v, ok := mr.metricsMap[metric.hash]
 	if !ok {
