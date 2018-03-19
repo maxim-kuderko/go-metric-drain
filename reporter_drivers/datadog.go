@@ -31,6 +31,10 @@ func (dd *DatadogDriver) Send(name string, Points [][2]int64, tags map[string]st
 
 	req, err := http.NewRequest("POST", dd.url, bytes.NewBuffer(jsonData))
 	req.Header.Set("Content-Type", "application/json")
+	if err != nil{
+		log.Println(err)
+		return
+	}
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
