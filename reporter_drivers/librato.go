@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"encoding/json"
 	"encoding/base64"
+	"strings"
 )
 
 type LibratoDriver struct {
@@ -17,7 +18,7 @@ type LibratoDriver struct {
 
 func NewLibratoDriver(token string) *LibratoDriver {
 	enc := base64.StdEncoding
-	return &LibratoDriver{url: "https://api.appoptics.com/v1/measurements", token: "Basic " + enc.EncodeToString([]byte(token))}
+	return &LibratoDriver{url: "https://api.appoptics.com/v1/measurements", token: "Basic " + enc.EncodeToString([]byte(token + ":"))}
 }
 
 func (ld *LibratoDriver) Send(name string, Points [][2]int64, tags map[string]string) {
@@ -34,7 +35,7 @@ func (ld *LibratoDriver) Send(name string, Points [][2]int64, tags map[string]st
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 202 {
+	if resp.StatusCode != http.StatusAccepted {
 		fmt.Println("response Status:", resp.Status)
 		fmt.Println("response Headers:", resp.Header)
 		body, _ := ioutil.ReadAll(resp.Body)
@@ -43,32 +44,60 @@ func (ld *LibratoDriver) Send(name string, Points [][2]int64, tags map[string]st
 }
 
 func (ld *LibratoDriver) jsonify(name string, Points [][2]int64, tags map[string]string) []byte {
-	metrics := make([]*libratoMetric, 0, 1000)
-	for _, p := range Points {
-		m := &libratoMetric{
-			Name:   name,
-			Time:   p[1] - (p[1] % 60),
-			Period: 60,
-			Count:  p[0],
-			Tags: tags,
-		}
-		metrics = append(metrics, m)
+	metrics := make([]*libratoMetric, 0, 2)
+
+	for _, v := range ld.aggregatePoints(name, Points){
+		metrics = append(metrics, v)
 	}
-	ds := libratoRequest{Measurements: metrics}
+	if tags == nil || len(tags) == 0{
+		tags = map[string]string{"general": "general"}
+	}
+	for k, v := range tags{
+		tags[k] = strings.Replace(v, " ", "_", -1)
+	}
+	ds := libratoRequest{Measurements: metrics, Tags: tags,}
 	b, _ := json.Marshal(ds)
 	return b
 
 }
 
+func  (ld *LibratoDriver) aggregatePoints(name string, Points [][2]int64) map[int64]*libratoMetric{
+	mp := map[int64]*libratoMetric{}
+	for _, p := range Points {
+		key := p[0] - p[0] % 60
+		v, ok := mp[key]
+		if !ok{
+			mp[key] = &libratoMetric{}
+			v = mp[key]
+			v.Name = name
+			v.Period = 60
+			v.Time = key
+		}
+		v.Count++
+		v.Sum += p[1]
+		v.Last = p[1]
+		if p[1] < v.Min{
+			v.Min = p[1]
+		}
+		if p[1] > v.Max{
+			v.Max = p[1]
+		}
+	}
+	return mp
+}
+
 type libratoRequest struct {
-	Measurements []*libratoMetric `json:"measurements"`
+	Measurements []*libratoMetric  `json:"measurements"`
+	Tags         map[string]string `json:"tags"`
 }
 
 type libratoMetric struct {
-	Name   string            `json:"name"`
-	Time   int64             `json:"time"`
-	Period int               `json:"period"`
-	Sum    float64           `json:"sum"`
-	Count  int64               `json:"count"`
-	Tags   map[string]string `json:"tags"`
+	Name   string `json:"name"`
+	Time   int64  `json:"time"`
+	Period int64  `json:"period"`
+	Sum    int64  `json:"sum"`
+	Count  int64  `json:"count"`
+	Min    int64  `json:"min"`
+	Max    int64  `json:"max"`
+	Last   int64  `json:"last"`
 }
