@@ -24,7 +24,7 @@ type MetricsCollection struct {
 }
 
 func newMetricsCollection(name string, point int64, tags map[string]string, interval float64, maxMetrics int, driver reporter_drivers.DriverInterface, isStub bool) *MetricsCollection {
-	pt := [2]int64{time.Now().Unix(), point}
+	pt := [2]int64{time.Now().UTC().Unix(), point}
 	r := MetricsCollection{
 		name:       name,
 		points:     [][2]int64{pt},
