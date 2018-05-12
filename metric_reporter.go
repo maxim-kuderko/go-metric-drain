@@ -13,7 +13,6 @@ type MetricReporter struct {
 	maxMetrics int
 	prefix     string
 	isStub     bool
-	cq         chan *MetricsCollection
 	sync.RWMutex
 }
 
@@ -25,7 +24,6 @@ func NewMetricsReporter(driver reporter_drivers.DriverInterface, interval float6
 		maxMetrics: maxMetrics,
 		prefix:     prefix,
 		isStub:     isStub,
-		cq:         make(chan *MetricsCollection, 500),
 	}
 	return mc
 }
@@ -48,7 +46,7 @@ func (mr *MetricReporter) Wait() {
 	for _, v := range mr.metricsMap {
 		wg.Add(1)
 		go func(v *MetricsCollection) {
-			v.flush()
+			v.flush(false,true)
 			wg.Done()
 		}(v)
 	}
