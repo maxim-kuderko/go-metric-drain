@@ -6,6 +6,7 @@ import (
 	"os/signal"
 	"os"
 	"log"
+	"math/rand"
 )
 
 func main() {
@@ -16,8 +17,8 @@ func main() {
 	reporter := metric_reporter.NewMetricsReporter(driver, 60, 150000, "production.example_app", false)
 	go func() {
 		for {
-			reporter.Send("test.metric1", 123, map[string]string{"test": "test1", "env": "example"})
-			reporter.Send("test.metric1", 321, map[string]string{"test": "test2", "env": "example"})
+			reporter.Send("test.metric1", rand.Int63n(1000), map[string]string{"test": "test1", "env": "example"})
+			reporter.Send("test.metric1", rand.Int63n(1000), map[string]string{"test": "test2", "env": "example"})
 
 		}
 	}()

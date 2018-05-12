@@ -27,53 +27,52 @@ func NewMetricsReporter(driver reporter_drivers.DriverInterface, interval float6
 		isStub:     isStub,
 		cq:         make(chan *MetricsCollection, 500),
 	}
-	go func() { mc.addCollections() }()
 	return mc
 }
 
 func (mr *MetricReporter) Send(name string, val int64, tags map[string]string) {
 	metric := newMetricsCollection(mr.prefix+"."+name, val, tags, mr.interval, mr.maxMetrics, mr.driver, mr.isStub)
-	mr.RWMutex.RLock()
-	defer mr.RUnlock()
-	v, ok := mr.metricsMap[metric.hash]
+	v, ok := mr.safeRead(metric)
 	if !ok {
-		go func() {
-			mr.cq <- metric
-		}()
-		return
+		v, ok = mr.safeWrite(metric)
+		if ok{
+			return
+		}
+		// If !ok then some other thread created the collection in the map, and we need to merge the two
 	}
 	v.merge(metric)
 }
 
-func (mr *MetricReporter) addCollections() {
-	for {
-		mc := <-mr.cq
-		func() {
-			mr.RWMutex.Lock()
-			defer mr.RWMutex.Unlock()
-			v, ok := mr.metricsMap[mc.hash]
-			if !ok {
-				mr.metricsMap[mc.hash] = mc
-				go func() { mc.flushTime() }()
-				return
-			}
-			go func(){
-				v.merge(mc)
-			}()
-		}()
-
-	}
-}
-
-func (mr *MetricReporter) Wait() bool {
+func (mr *MetricReporter) Wait() {
 	wg := sync.WaitGroup{}
 	for _, v := range mr.metricsMap {
 		wg.Add(1)
-		go func() {
+		go func(v *MetricsCollection) {
 			v.flush()
 			wg.Done()
-		}()
+		}(v)
 	}
 	wg.Wait()
-	return true
+}
+
+func (mr *MetricReporter) safeRead(metric *MetricsCollection) (*MetricsCollection, bool) {
+	mr.RWMutex.RLock()
+	defer mr.RUnlock()
+	v, ok := mr.metricsMap[metric.hash]
+	return v, ok
+}
+
+// returns true if written return false if other thread written first
+func (mr *MetricReporter) safeWrite(metric *MetricsCollection) (*MetricsCollection, bool) {
+	mr.RWMutex.Lock()
+	defer mr.RWMutex.Unlock()
+	v, ok := mr.metricsMap[metric.hash]
+	if ok {
+		return v, false
+	}
+	mr.metricsMap[metric.hash] = metric
+	go func(metric *MetricsCollection) { metric.flushTime() }(metric)
+
+	return metric, true
+
 }
