@@ -43,6 +43,8 @@ func (mr *MetricReporter) Send(name string, val int64, tags map[string]string) {
 
 func (mr *MetricReporter) Wait() {
 	wg := sync.WaitGroup{}
+	mr.RLock()
+	defer mr.RUnlock()
 	for _, v := range mr.metricsMap {
 		wg.Add(1)
 		go func(v *MetricsCollection) {
@@ -62,13 +64,15 @@ func (mr *MetricReporter) safeRead(metric *MetricsCollection) (*MetricsCollectio
 
 // returns true if written return false if other thread written first
 func (mr *MetricReporter) safeWrite(metric *MetricsCollection) (*MetricsCollection, bool) {
-	mr.RWMutex.Lock()
-	defer mr.RWMutex.Unlock()
+	mr.RLock()
 	v, ok := mr.metricsMap[metric.hash]
+	mr.RUnlock()
 	if ok {
 		return v, false
 	}
+	mr.Lock()
 	mr.metricsMap[metric.hash] = metric
+	mr.Unlock()
 	go func(metric *MetricsCollection) { metric.flushTime() }(metric)
 
 	return metric, true
