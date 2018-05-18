@@ -3,37 +3,40 @@ package metric_reporter
 import (
 	"time"
 	"sync"
-	"github.com/maxim-kuderko/metric-reporter/reporter_drivers"
+	"github.com/maxim-kuderko/metric-reporter/metric_drivers"
 	"crypto/md5"
 	"io"
 	"sort"
+	"fmt"
+	"strings"
+	"encoding/hex"
 )
 
 type MetricsCollection struct {
 	name       string
-	points     [][2]int64
+	points     [][2]float64
 	tags       map[string]string
 	hash       string
 	interval   float64
 	maxMetrics int
 	birthTime  time.Time
-	driver     reporter_drivers.DriverInterface
-	isStub     bool
+	drivers     []metric_drivers.DriverInterface
+	errors     chan error
 	count      int64
 	sync.Mutex
 }
 
-func newMetricsCollection(name string, point int64, tags map[string]string, interval float64, maxMetrics int, driver reporter_drivers.DriverInterface, isStub bool) *MetricsCollection {
-	pt := [2]int64{time.Now().UTC().Unix(), point}
+func newMetricsCollection(name string, point float64, tags map[string]string, interval float64, maxMetrics int, drivers []metric_drivers.DriverInterface, errors chan error) *MetricsCollection {
+	pt := [2]float64{float64(time.Now().UTC().Unix()), point}
 	r := MetricsCollection{
 		name:       name,
-		points:     [][2]int64{pt},
+		points:     [][2]float64{pt},
 		tags:       tags,
 		interval:   interval,
 		maxMetrics: maxMetrics,
 		birthTime:  time.Now(),
-		driver:     driver,
-		isStub:     isStub,
+		drivers:     drivers,
+		errors:     errors,
 	}
 	r.calcHash()
 	return &r
@@ -44,18 +47,19 @@ func (mc *MetricsCollection) calcHash() {
 
 	io.WriteString(hasher, mc.name)
 	if mc.tags != nil {
-		d := make([]string, 0, len(mc.tags)*2)
+		d := make([]string, len(mc.tags)*2)
+		c := 0
 		for k, v := range mc.tags {
-			d = append(d, k)
-			d = append(d, v)
+			d[c] = k
+			c++
+			d[c] = v
+			c++
 		}
 		sort.Strings(d)
-		for _, v := range d {
-			io.WriteString(hasher, v)
-		}
+		io.WriteString(hasher, strings.Join(d, ""))
 	}
 
-	mc.hash = string(hasher.Sum(nil))
+	mc.hash = hex.EncodeToString(hasher.Sum(nil))
 }
 
 func (mc *MetricsCollection) merge(newMc *MetricsCollection) {
@@ -77,7 +81,7 @@ func (mc *MetricsCollection) flushTime() {
 }
 
 func (mc *MetricsCollection) flush(timer bool, shouldLock bool) {
-	if shouldLock{
+	if shouldLock {
 		mc.Lock()
 		defer mc.Unlock()
 	}
@@ -85,13 +89,28 @@ func (mc *MetricsCollection) flush(timer bool, shouldLock bool) {
 		return
 	}
 	pointsToSend := mc.points
-	go func() {
-		if !mc.isStub {
-			mc.driver.Send(mc.name, pointsToSend, mc.tags)
+	go func(mc *MetricsCollection, pos [][2]float64) {
+		defer func() {
+			if r := recover(); r != nil {
+				fmt.Println("Recovered in f", r)
+			}
+		}()
+		wg := sync.WaitGroup{}
+		wg.Add(len(mc.drivers))
+		for _, d := range mc.drivers{
+			go func(wg sync.WaitGroup,hash string,  name string, pos [][2]float64, tags *map[string]string) {
+				defer func() {
+					wg.Done()
+				}()
+				if err := d.Send(hash, name, pos, tags); err != nil{
+					mc.errors <- err
+				}
+			}(wg, mc.hash, mc.name, pos, &mc.tags)
 		}
-		pointsToSend = nil
-	}()
 
-	mc.points = [][2]int64{}
+		pos = nil
+	}(mc, pointsToSend)
+
+	mc.points = [][2]float64{}
 	mc.birthTime = time.Now()
 }
