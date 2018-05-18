@@ -12,8 +12,8 @@ func main() {
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop)
 
-	ldriver := metric_drivers.NewLibratoMetric("62e23fe238528b28418eac212922b2f254af530bad181fb41137f962e8637020")
-	cdriver := metric_drivers.NewMysqlCounter("root:getalife@tcp(localhost:3306)/metrics", "counters", 130)
+	ldriver := metric_drivers.NewLibratoMetric("")
+	cdriver := metric_drivers.NewMysqlCounter("root:1234@tcp(localhost:3306)/metrics", "counters", 130)
 
 	reporter, err := metric_reporter.NewMetricsReporter([]metric_drivers.DriverInterface{ldriver}, []metric_drivers.DriverInterface{cdriver}, 10, 2000000000, "production.example_app")
 	pool := 16
