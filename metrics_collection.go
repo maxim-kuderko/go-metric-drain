@@ -9,7 +9,6 @@ import (
 	"encoding/hex"
 	"sort"
 	"github.com/cespare/xxhash"
-	"log"
 )
 
 type MetricsCollection struct {
@@ -86,7 +85,6 @@ func (mc *MetricsCollection) flush(timer bool, shouldLock bool, shouldWait bool)
 		return
 	}
 	w := sync.WaitGroup{}
-	log.Println("adding ", len(mc.drivers), " for wait")
 	w.Add(len(mc.drivers))
 
 	for _, d := range mc.drivers{
@@ -94,7 +92,6 @@ func (mc *MetricsCollection) flush(timer bool, shouldLock bool, shouldWait bool)
 			if err := d.Send(mc.hash, mc.name, pos, &mc.tags); err != nil{
 				mc.errors <- err
 			}
-			log.Println("Done")
 			w.Done()
 		}(d, mc.points)
 	}
