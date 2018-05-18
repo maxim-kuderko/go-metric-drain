@@ -4,12 +4,12 @@ import (
 	"time"
 	"sync"
 	"github.com/maxim-kuderko/metric-reporter/metric_drivers"
-	"crypto/md5"
 	"io"
-	"sort"
-	"fmt"
 	"strings"
 	"encoding/hex"
+	"sort"
+	"github.com/cespare/xxhash"
+	"log"
 )
 
 type MetricsCollection struct {
@@ -43,13 +43,12 @@ func newMetricsCollection(name string, point float64, tags map[string]string, in
 }
 
 func (mc *MetricsCollection) calcHash() {
-	hasher := md5.New()
+	hasher := xxhash.New()
 
 	io.WriteString(hasher, mc.name)
 	if mc.tags != nil {
 		d := make([]string, 0, len(mc.tags))
-		for k, v := range mc.tags {
-			d = append(d,k)
+		for _, v := range mc.tags {
 			d = append(d,v)
 		}
 		sort.Strings(d)
@@ -64,7 +63,8 @@ func (mc *MetricsCollection) merge(newMc *MetricsCollection) {
 	defer mc.Unlock()
 	mc.points = append(mc.points, newMc.points...)
 	if len(mc.points) >= mc.maxMetrics {
-		mc.flush(false, false)
+
+		mc.flush(false, false, false)
 	}
 }
 
@@ -72,42 +72,37 @@ func (mc *MetricsCollection) flushTime() {
 	ticker := time.NewTicker(time.Second)
 	for {
 		<-ticker.C
-		mc.flush(true, true)
+		mc.flush(true, true, false)
 	}
 
 }
 
-func (mc *MetricsCollection) flush(timer bool, shouldLock bool) {
+func (mc *MetricsCollection) flush(timer bool, shouldLock bool, shouldWait bool){
 	if shouldLock {
 		mc.Lock()
 		defer mc.Unlock()
 	}
-	if timer && time.Since(mc.birthTime).Seconds() < float64(mc.interval) || len(mc.points) == 0 {
+	if len(mc.points) == 0 || (timer && time.Since(mc.birthTime).Seconds() < float64(mc.interval)) {
 		return
 	}
-	pointsToSend := mc.points
-	go func(mc *MetricsCollection, pos [][2]float64) {
-		defer func() {
-			if r := recover(); r != nil {
-				fmt.Println("Recovered in f", r)
-			}
-		}()
-		wg := sync.WaitGroup{}
-		wg.Add(len(mc.drivers))
-		for _, d := range mc.drivers{
-			go func(wg sync.WaitGroup,hash string,  name string, pos [][2]float64, tags *map[string]string) {
-				defer func() {
-					wg.Done()
-				}()
-				if err := d.Send(hash, name, pos, tags); err != nil{
-					mc.errors <- err
-				}
-			}(wg, mc.hash, mc.name, pos, &mc.tags)
-		}
+	w := sync.WaitGroup{}
+	log.Println("adding ", len(mc.drivers), " for wait")
+	w.Add(len(mc.drivers))
 
-		pos = nil
-	}(mc, pointsToSend)
+	for _, d := range mc.drivers{
+		go func(d metric_drivers.DriverInterface, pos [][2]float64,) {
+			if err := d.Send(mc.hash, mc.name, pos, &mc.tags); err != nil{
+				mc.errors <- err
+			}
+			log.Println("Done")
+			w.Done()
+		}(d, mc.points)
+	}
+
 
 	mc.points = [][2]float64{}
 	mc.birthTime = time.Now()
+	if shouldWait{
+		w.Wait()
+	}
 }

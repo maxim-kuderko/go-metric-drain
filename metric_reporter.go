@@ -70,16 +70,36 @@ func (mr *MetricReporter) Count(name string, val float64, tags map[string]string
 }
 
 func (mr *MetricReporter) Wait() {
+	mr.m.Lock()
+	//defer mr.m.Unlock()
+	mr.c.Lock()
+	//defer mr.c.Unlock()
 	wg := sync.WaitGroup{}
-	wg.Add(len(mr.mMap))
-	for _, v := range mr.mMap {
-		go func(v *MetricsCollection) {
-			defer func() {
-				wg.Done()
-			}()
-			v.flush(false, true)
-		}(v)
-	}
+	wg.Add(len(mr.mMap) + len(mr.cMap))
+	go func() {
+		for _, v := range mr.mMap {
+			go func(v *MetricsCollection) {
+				defer func() {
+					wg.Done()
+				}()
+				v.flush(false, true, true)
+			}(v)
+		}
+	}()
+
+
+	go func() {
+		for _, v := range mr.cMap {
+			go func(v *MetricsCollection) {
+				defer func() {
+					wg.Done()
+				}()
+				v.flush(false, true, true)
+			}(v)
+		}
+	}()
+
+
 	wg.Wait()
 }
 
