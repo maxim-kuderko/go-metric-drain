@@ -89,10 +89,10 @@ func (mc *MetricsCollection) flush(timer bool, shouldLock bool, shouldWait bool)
 
 	for _, d := range mc.drivers{
 		go func(d metric_drivers.DriverInterface, pos [][2]float64,) {
+			defer w.Done()
 			if err := d.Send(mc.hash, mc.name, pos, &mc.tags); err != nil{
 				mc.errors <- err
 			}
-			w.Done()
 		}(d, mc.points)
 	}
 

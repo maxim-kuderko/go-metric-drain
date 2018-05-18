@@ -79,9 +79,7 @@ func (mr *MetricReporter) Wait() {
 	go func() {
 		for _, v := range mr.mMap {
 			go func(v *MetricsCollection) {
-				defer func() {
-					wg.Done()
-				}()
+				defer wg.Done()
 				v.flush(false, true, true)
 			}(v)
 		}
@@ -91,9 +89,7 @@ func (mr *MetricReporter) Wait() {
 	go func() {
 		for _, v := range mr.cMap {
 			go func(v *MetricsCollection) {
-				defer func() {
-					wg.Done()
-				}()
+				defer wg.Done()
 				v.flush(false, true, true)
 			}(v)
 		}
