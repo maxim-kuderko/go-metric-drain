@@ -12,19 +12,19 @@ type MetricReporter struct {
 	mMap           map[string]*MetricsCollection
 	cMap           map[string]*MetricsCollection
 	open           bool
-	interval       float64
+	interval       int
 	maxMetrics     int
 	prefix         string
 	errors         chan error
-	m sync.RWMutex
-	c sync.RWMutex
+	m              sync.RWMutex
+	c              sync.RWMutex
 }
 
 func NewMetricsReporter(
 	metricDrivers []metric_drivers.DriverInterface,
 	counterDrivers []metric_drivers.DriverInterface,
-	interval float64, maxMetrics int, prefix string) (mc *MetricReporter, errors chan error) {
-		errors = make(chan error, 1000)
+	interval int, maxMetrics int, prefix string) (mc *MetricReporter, errors chan error) {
+	errors = make(chan error, 1000)
 	mc = &MetricReporter{
 		metricDrivers:  metricDrivers,
 		counterDrivers: counterDrivers,
@@ -39,28 +39,30 @@ func NewMetricsReporter(
 }
 
 // backward comparability
-func (mr *MetricReporter) Send(name string, val int64, tags map[string]string) {
-	mr.Metric(name, float64(val), tags)
+func (mr *MetricReporter) Send(name string, val int64, tags map[string]string, args ...int) {
+	mr.Metric(name, float64(val), tags, args...)
 }
 
-func (mr *MetricReporter) Metric(name string, val float64, tags map[string]string) {
-	metric := newMetricsCollection(mr.fullName(name), val, tags, mr.interval, mr.maxMetrics, mr.metricDrivers, mr.errors)
+func (mr *MetricReporter) Metric(name string, val float64, tags map[string]string, args ...int) {
+	interval, maxMetrics := mr.getCollectionParams(args...)
+	metric := newMetricsCollection(mr.fullName(name), val, tags, interval, maxMetrics, mr.metricDrivers, mr.errors)
 	v, ok := mr.safeReadM(metric)
 	if !ok {
 		v, ok = mr.safeWriteM(metric)
-		if ok{
+		if ok {
 			return
 		} // If !ok then some other thread created the collection in the map, and we need to merge the two
 	}
 	v.merge(metric)
 }
 
-func (mr *MetricReporter) Count(name string, val float64, tags map[string]string) {
-	metric := newMetricsCollection(mr.fullName(name), val, tags, mr.interval, mr.maxMetrics, mr.counterDrivers, mr.errors)
+func (mr *MetricReporter) Count(name string, val float64, tags map[string]string, args ...int) {
+	interval, maxMetrics := mr.getCollectionParams(args...)
+	metric := newMetricsCollection(mr.fullName(name), val, tags, interval, maxMetrics, mr.counterDrivers, mr.errors)
 	v, ok := mr.safeReadC(metric)
 	if !ok {
 		v, ok = mr.safeWriteC(metric)
-		if ok{
+		if ok {
 			return
 		} // If !ok then some other thread created the collection in the map, and we need to merge the two
 	}
@@ -75,7 +77,7 @@ func (mr *MetricReporter) Wait() {
 			defer func() {
 				wg.Done()
 			}()
-			v.flush(false,true)
+			v.flush(false, true)
 		}(v)
 	}
 	wg.Wait()
@@ -99,11 +101,8 @@ func (mr *MetricReporter) safeWriteM(metric *MetricsCollection) (*MetricsCollect
 	mr.mMap[metric.hash] = metric
 	go metric.flushTime()
 
-
 	return metric, true
 }
-
-
 
 func (mr *MetricReporter) safeReadC(metric *MetricsCollection) (*MetricsCollection, bool) {
 	mr.c.RLock()
@@ -132,4 +131,16 @@ func (mr *MetricReporter) fullName(name string) string {
 	buf.WriteString(".")
 	buf.WriteString(name)
 	return buf.String()
+}
+
+func (mr *MetricReporter) getCollectionParams(args ...int) (interval, maxMetrics int) {
+	interval = mr.interval
+	maxMetrics = mr.maxMetrics
+	if len(args) > 0 {
+		interval = args[0]
+		if len(args) > 1 {
+			maxMetrics = args[1]
+		}
+	}
+	return interval, maxMetrics
 }

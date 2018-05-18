@@ -17,7 +17,7 @@ type MetricsCollection struct {
 	points     [][2]float64
 	tags       map[string]string
 	hash       string
-	interval   float64
+	interval   int
 	maxMetrics int
 	birthTime  time.Time
 	drivers     []metric_drivers.DriverInterface
@@ -26,7 +26,7 @@ type MetricsCollection struct {
 	sync.Mutex
 }
 
-func newMetricsCollection(name string, point float64, tags map[string]string, interval float64, maxMetrics int, drivers []metric_drivers.DriverInterface, errors chan error) *MetricsCollection {
+func newMetricsCollection(name string, point float64, tags map[string]string, interval int, maxMetrics int, drivers []metric_drivers.DriverInterface, errors chan error) *MetricsCollection {
 	pt := [2]float64{float64(time.Now().UTC().Unix()), point}
 	r := MetricsCollection{
 		name:       name,
@@ -85,7 +85,7 @@ func (mc *MetricsCollection) flush(timer bool, shouldLock bool) {
 		mc.Lock()
 		defer mc.Unlock()
 	}
-	if timer && time.Since(mc.birthTime).Seconds() < mc.interval || len(mc.points) == 0 {
+	if timer && time.Since(mc.birthTime).Seconds() < float64(mc.interval) || len(mc.points) == 0 {
 		return
 	}
 	pointsToSend := mc.points
