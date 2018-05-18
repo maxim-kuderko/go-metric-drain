@@ -47,13 +47,10 @@ func (mc *MetricsCollection) calcHash() {
 
 	io.WriteString(hasher, mc.name)
 	if mc.tags != nil {
-		d := make([]string, len(mc.tags)*2)
-		c := 0
+		d := make([]string, 0, len(mc.tags))
 		for k, v := range mc.tags {
-			d[c] = k
-			c++
-			d[c] = v
-			c++
+			d = append(d,k)
+			d = append(d,v)
 		}
 		sort.Strings(d)
 		io.WriteString(hasher, strings.Join(d, ""))
