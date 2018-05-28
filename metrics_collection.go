@@ -3,59 +3,58 @@ package metric_reporter
 import (
 	"time"
 	"sync"
-	"github.com/maxim-kuderko/metric-reporter/reporter_drivers"
-	"crypto/md5"
+	"github.com/maxim-kuderko/metric-reporter/metric_drivers"
 	"io"
+	"strings"
+	"encoding/hex"
 	"sort"
+	"github.com/cespare/xxhash"
 )
 
 type MetricsCollection struct {
 	name       string
-	points     [][2]int64
+	points     [][2]float64
 	tags       map[string]string
 	hash       string
-	interval   float64
+	interval   int
 	maxMetrics int
 	birthTime  time.Time
-	driver     reporter_drivers.DriverInterface
-	isStub     bool
+	drivers     []metric_drivers.DriverInterface
+	errors     chan error
 	count      int64
 	sync.Mutex
 }
 
-func newMetricsCollection(name string, point int64, tags map[string]string, interval float64, maxMetrics int, driver reporter_drivers.DriverInterface, isStub bool) *MetricsCollection {
-	pt := [2]int64{time.Now().UTC().Unix(), point}
+func newMetricsCollection(name string, point float64, tags map[string]string, interval int, maxMetrics int, drivers []metric_drivers.DriverInterface, errors chan error) *MetricsCollection {
+	pt := [2]float64{float64(time.Now().UTC().Unix()), point}
 	r := MetricsCollection{
 		name:       name,
-		points:     [][2]int64{pt},
+		points:     [][2]float64{pt},
 		tags:       tags,
 		interval:   interval,
 		maxMetrics: maxMetrics,
 		birthTime:  time.Now(),
-		driver:     driver,
-		isStub:     isStub,
+		drivers:     drivers,
+		errors:     errors,
 	}
 	r.calcHash()
 	return &r
 }
 
 func (mc *MetricsCollection) calcHash() {
-	hasher := md5.New()
+	hasher := xxhash.New()
 
 	io.WriteString(hasher, mc.name)
 	if mc.tags != nil {
-		d := make([]string, 0, len(mc.tags)*2)
-		for k, v := range mc.tags {
-			d = append(d, k)
-			d = append(d, v)
+		d := make([]string, 0, len(mc.tags))
+		for _, v := range mc.tags {
+			d = append(d,v)
 		}
 		sort.Strings(d)
-		for _, v := range d {
-			io.WriteString(hasher, v)
-		}
+		io.WriteString(hasher, strings.Join(d, ""))
 	}
 
-	mc.hash = string(hasher.Sum(nil))
+	mc.hash = hex.EncodeToString(hasher.Sum(nil))
 }
 
 func (mc *MetricsCollection) merge(newMc *MetricsCollection) {
@@ -63,7 +62,8 @@ func (mc *MetricsCollection) merge(newMc *MetricsCollection) {
 	defer mc.Unlock()
 	mc.points = append(mc.points, newMc.points...)
 	if len(mc.points) >= mc.maxMetrics {
-		mc.flush(false, false)
+
+		mc.flush(false, false, false)
 	}
 }
 
@@ -71,27 +71,35 @@ func (mc *MetricsCollection) flushTime() {
 	ticker := time.NewTicker(time.Second)
 	for {
 		<-ticker.C
-		mc.flush(true, true)
+		mc.flush(true, true, false)
 	}
 
 }
 
-func (mc *MetricsCollection) flush(timer bool, shouldLock bool) {
-	if shouldLock{
+func (mc *MetricsCollection) flush(timer bool, shouldLock bool, shouldWait bool){
+	if shouldLock {
 		mc.Lock()
 		defer mc.Unlock()
 	}
-	if timer && time.Since(mc.birthTime).Seconds() < mc.interval || len(mc.points) == 0 {
+	if len(mc.points) == 0 || (timer && time.Since(mc.birthTime).Seconds() < float64(mc.interval)) {
 		return
 	}
-	pointsToSend := mc.points
-	go func() {
-		if !mc.isStub {
-			mc.driver.Send(mc.name, pointsToSend, mc.tags)
-		}
-		pointsToSend = nil
-	}()
+	w := sync.WaitGroup{}
+	w.Add(len(mc.drivers))
 
-	mc.points = [][2]int64{}
+	for _, d := range mc.drivers{
+		go func(d metric_drivers.DriverInterface, pos [][2]float64,) {
+			defer w.Done()
+			if err := d.Send(mc.hash, mc.name, pos, &mc.tags); err != nil{
+				mc.errors <- err
+			}
+		}(d, mc.points)
+	}
+
+
+	mc.points = [][2]float64{}
 	mc.birthTime = time.Now()
+	if shouldWait{
+		w.Wait()
+	}
 }
