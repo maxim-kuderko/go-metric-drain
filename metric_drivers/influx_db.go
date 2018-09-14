@@ -45,7 +45,7 @@ func (ifdb *InfluxDB) buildBatch(name string, Points [][2]float64, tags *map[str
 	}
 
 	for _, p := range Points{
-		p, err := client.NewPoint(name, *tags, map[string]interface{}{name: p}, time.Unix(int64(p[0]),0))
+		p, err := client.NewPoint(name, *tags, map[string]interface{}{name: p[1]}, time.Unix(int64(p[0]),0))
 		if err != nil{
 			log.Println("debug: ", err)
 			continue
