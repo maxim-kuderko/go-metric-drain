@@ -1,9 +1,9 @@
 package metric_reporter
 
 import (
+	"bytes"
 	"github.com/maxim-kuderko/metric-reporter/metric_drivers"
 	"sync"
-	"bytes"
 )
 
 type MetricReporter struct {
@@ -15,15 +15,17 @@ type MetricReporter struct {
 	interval       int
 	maxMetrics     int
 	prefix         string
+	baseTags       map[string]string
 	errors         chan error
-	m              sync.RWMutex
-	c              sync.RWMutex
+
+	m sync.RWMutex
+	c sync.RWMutex
 }
 
 func NewMetricsReporter(
 	metricDrivers []metric_drivers.DriverInterface,
 	counterDrivers []metric_drivers.DriverInterface,
-	interval int, maxMetrics int, prefix string) (mc *MetricReporter, errors chan error) {
+	interval int, maxMetrics int, prefix string, baseTags map[string]string) (mc *MetricReporter, errors chan error) {
 	errors = make(chan error, 1000)
 	mc = &MetricReporter{
 		metricDrivers:  metricDrivers,
@@ -33,6 +35,7 @@ func NewMetricsReporter(
 		interval:       interval,
 		maxMetrics:     maxMetrics,
 		prefix:         prefix,
+		baseTags:       baseTags,
 		errors:         errors,
 	}
 	return mc, errors
@@ -85,7 +88,6 @@ func (mr *MetricReporter) Wait() {
 		}
 	}()
 
-
 	go func() {
 		for _, v := range mr.cMap {
 			go func(v *MetricsCollection) {
@@ -95,8 +97,19 @@ func (mr *MetricReporter) Wait() {
 		}
 	}()
 
-
 	wg.Wait()
+}
+
+func (mr *MetricReporter) addBaseTags(tags map[string]string) map[string]string {
+	if tags == nil {
+		return mr.baseTags
+	}
+	for k, v := range mr.baseTags {
+		if _, ok := tags[k]; !ok {
+			tags[k] = v
+		}
+	}
+	return tags
 }
 
 func (mr *MetricReporter) safeReadM(metric *MetricsCollection) (*MetricsCollection, bool) {

@@ -1,11 +1,11 @@
 package main
 
 import (
-	"github.com/maxim-kuderko/metric-reporter/metric_drivers"
 	"github.com/maxim-kuderko/metric-reporter"
-	"os/signal"
-	"os"
+	"github.com/maxim-kuderko/metric-reporter/metric_drivers"
 	"log"
+	"os"
+	"os/signal"
 )
 
 func main() {
@@ -15,24 +15,24 @@ func main() {
 	ldriver := metric_drivers.NewLibratoMetric("62e23fe238528b28418eac212922b2f254af530bad181fb41137f962e8637020")
 	cdriver := metric_drivers.NewMysqlCounter("root:getalife@tcp(localhost:3306)/metrics", "counters", 130)
 
-	reporter, err := metric_reporter.NewMetricsReporter([]metric_drivers.DriverInterface{ldriver}, []metric_drivers.DriverInterface{cdriver}, 10, 2000000000, "production.example_app")
+	reporter, err := metric_reporter.NewMetricsReporter([]metric_drivers.DriverInterface{ldriver}, []metric_drivers.DriverInterface{cdriver}, 10, 2000000000, "example_app", map[string]string{"env": "test"})
 	pool := 16
-	sem := make(chan bool,pool)
-	for i := 0; i< pool; i++{
+	sem := make(chan bool, pool)
+	for i := 0; i < pool; i++ {
 		sem <- true
 	}
 	go func() {
-		for i := 0.0; i< 999999.0; i++{
-			<- sem
+		for i := 0.0; i < 999999.0; i++ {
+			<-sem
 			go func(i float64) {
-				reporter.Send("test.metric1", int64(i), map[string]string{"test": "test1",})
-				reporter.Send("test.metric1", int64(i), map[string]string{"test": "test2", },)
-				reporter.Count("test.metric1", i, map[string]string{"test": "test2", },)
-				reporter.Count("test.metric1", -i, map[string]string{"test": "test2", },)
-				reporter.Count("test.metric2", 1, map[string]string{"test": "test2",}, )
-				reporter.Count("test.metric2", -1, map[string]string{"test": "test2", },)
-				reporter.Count("test.metric3", 1, map[string]string{"test": "test2", },11)
-				reporter.Count("test.metric4", 1, map[string]string{"test": "test2",})
+				reporter.Send("test.metric1", int64(i), map[string]string{"test": "test1"})
+				reporter.Send("test.metric1", int64(i), map[string]string{"test": "test2"})
+				reporter.Count("test.metric1", i, map[string]string{"test": "test2"})
+				reporter.Count("test.metric1", -i, map[string]string{"test": "test2"})
+				reporter.Count("test.metric2", 1, map[string]string{"test": "test2"})
+				reporter.Count("test.metric2", -1, map[string]string{"test": "test2"})
+				reporter.Count("test.metric3", 1, map[string]string{"test": "test2"}, 11)
+				reporter.Count("test.metric4", 1, map[string]string{"test": "test2"})
 				sem <- true
 			}(i)
 		}
@@ -43,7 +43,6 @@ func main() {
 			log.Println(e)
 		}
 	}()
-
 
 	<-stop
 	log.Println("sigint")
