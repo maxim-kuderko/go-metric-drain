@@ -48,7 +48,7 @@ func (mr *MetricReporter) Send(name string, val int64, tags map[string]string, a
 
 func (mr *MetricReporter) Metric(name string, val float64, tags map[string]string, args ...int) {
 	interval, maxMetrics := mr.getCollectionParams(args...)
-	metric := newMetricsCollection(mr.fullName(name), val, tags, interval, maxMetrics, mr.metricDrivers, mr.errors)
+	metric := newMetricsCollection(mr.fullName(name), val, mr.addBaseTags(tags), interval, maxMetrics, mr.metricDrivers, mr.errors)
 	v, ok := mr.safeReadM(metric)
 	if !ok {
 		v, ok = mr.safeWriteM(metric)
