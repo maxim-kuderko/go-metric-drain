@@ -61,7 +61,7 @@ func (mr *MetricReporter) Metric(name string, val float64, tags map[string]strin
 
 func (mr *MetricReporter) Count(name string, val float64, tags map[string]string, args ...int) {
 	interval, maxMetrics := mr.getCollectionParams(args...)
-	metric := newMetricsCollection(mr.fullName(name), val, tags, interval, maxMetrics, mr.counterDrivers, mr.errors)
+	metric := newMetricsCollection(mr.fullName(name), val, mr.addBaseTags(tags), interval, maxMetrics, mr.counterDrivers, mr.errors)
 	v, ok := mr.safeReadC(metric)
 	if !ok {
 		v, ok = mr.safeWriteC(metric)
