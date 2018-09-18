@@ -3,7 +3,6 @@ package metric_drivers
 import (
 	"github.com/influxdata/influxdb/client/v2"
 	"log"
-	"time"
 )
 
 type InfluxDB struct {
@@ -25,7 +24,7 @@ func NewInfluxDB(url, username, password, database, precision, retention string)
 	return &InfluxDB{c: c, precision: precision, database: database, retention: retention}
 }
 
-func (ifdb *InfluxDB) Send(key string, name string, Points [][2]float64, tags *map[string]string) error {
+func (ifdb *InfluxDB) Send(key string, name string, Points []PtDataer, tags *map[string]string) error {
 	batchPoints, err := ifdb.buildBatch(name, Points, tags)
 	if err != nil {
 		return err
@@ -37,7 +36,7 @@ func (ifdb *InfluxDB) Send(key string, name string, Points [][2]float64, tags *m
 	return nil
 }
 
-func (ifdb *InfluxDB) buildBatch(name string, Points [][2]float64, tags *map[string]string) (client.BatchPoints, error) {
+func (ifdb *InfluxDB) buildBatch(name string, Points []PtDataer, tags *map[string]string) (client.BatchPoints, error) {
 	bp, err := client.NewBatchPoints(client.BatchPointsConfig{
 		Database:        ifdb.database,
 		Precision:       ifdb.precision,
@@ -48,7 +47,7 @@ func (ifdb *InfluxDB) buildBatch(name string, Points [][2]float64, tags *map[str
 	}
 
 	for _, p := range Points {
-		p, err := client.NewPoint(name, *tags, map[string]interface{}{"point": p[1]}, time.Unix(int64(p[0]), 0))
+		p, err := client.NewPoint(name, *tags, map[string]interface{}{"point": p.Data()}, p.Time())
 		if err != nil {
 			continue
 		}

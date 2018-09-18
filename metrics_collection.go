@@ -1,19 +1,19 @@
 package metric_reporter
 
 import (
-	"time"
-	"sync"
+	"encoding/hex"
+	"github.com/cespare/xxhash"
 	"github.com/maxim-kuderko/metric-reporter/metric_drivers"
 	"io"
-	"strings"
-	"encoding/hex"
 	"sort"
-	"github.com/cespare/xxhash"
+	"strings"
+	"sync"
+	"time"
 )
 
 type MetricsCollection struct {
 	name       string
-	points     [][2]float64
+	points     []metric_drivers.PtDataer
 	tags       map[string]string
 	hash       string
 	interval   int
@@ -25,11 +25,11 @@ type MetricsCollection struct {
 	sync.Mutex
 }
 
+
 func newMetricsCollection(name string, point float64, tags map[string]string, interval int, maxMetrics int, drivers []metric_drivers.DriverInterface, errors chan error) *MetricsCollection {
-	pt := [2]float64{float64(time.Now().UTC().Unix()), point}
 	r := MetricsCollection{
 		name:       name,
-		points:     [][2]float64{pt},
+		points:     []metric_drivers.PtDataer{metric_drivers.NewPoint(time.Now(), point)},
 		tags:       tags,
 		interval:   interval,
 		maxMetrics: maxMetrics,
@@ -88,7 +88,7 @@ func (mc *MetricsCollection) flush(timer bool, shouldLock bool, shouldWait bool)
 	w.Add(len(mc.drivers))
 
 	for _, d := range mc.drivers{
-		go func(d metric_drivers.DriverInterface, pos [][2]float64,) {
+		go func(d metric_drivers.DriverInterface, pos []metric_drivers.PtDataer,) {
 			defer w.Done()
 			if err := d.Send(mc.hash, mc.name, pos, &mc.tags); err != nil{
 				mc.errors <- err
@@ -97,7 +97,7 @@ func (mc *MetricsCollection) flush(timer bool, shouldLock bool, shouldWait bool)
 	}
 
 
-	mc.points = [][2]float64{}
+	mc.points = make([]metric_drivers.PtDataer,0,mc.maxMetrics)
 	mc.birthTime = time.Now()
 	if shouldWait{
 		w.Wait()

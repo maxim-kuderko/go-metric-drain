@@ -2,9 +2,9 @@ package metric_drivers
 
 import (
 	"database/sql"
+	"encoding/json"
 	_ "github.com/go-sql-driver/mysql"
 	"log"
-	"encoding/json"
 )
 
 type Mysql struct{
@@ -26,7 +26,7 @@ func NewMysqlCounter(DSN string, tableName string, dbPool int) *Mysql{
 }
 
 
-func (m *Mysql) Send(key string, name string, Points [][2]float64, tags *map[string]string) error{
+func (m *Mysql) Send(key string, name string, Points []PtDataer, tags *map[string]string) error{
 	j, _ := json.Marshal(tags)
 	_, err := m.conn.Exec(m.insertString, key, name, j, m.aggregatePoints(Points))
 	if err != nil {
@@ -35,10 +35,10 @@ func (m *Mysql) Send(key string, name string, Points [][2]float64, tags *map[str
 	return nil
 }
 
-func  (m *Mysql) aggregatePoints(Points [][2]float64) float64{
+func  (m *Mysql) aggregatePoints(Points []PtDataer) float64{
 	var c float64
 	for _, p := range Points {
-		c += p[1]
+		c += p.Data()
 	}
 	return c
 }

@@ -23,7 +23,7 @@ func NewDatadogDriver(apiKey string) *DatadogDriver {
 	return &DatadogDriver{url: "https://app.datadoghq.com/api/v1/series?api_key=" + apiKey}
 }
 
-func (dd *DatadogDriver) Send(key string, name string, Points [][2]float64, tags *map[string]string) error{
+func (dd *DatadogDriver) Send(key string, name string, Points []PtDataer, tags *map[string]string) error{
 	jsonData := dd.jsonify(name, Points, tags)
 
 	req, err := http.NewRequest("POST", dd.url, bytes.NewBuffer(jsonData))
@@ -40,7 +40,7 @@ func (dd *DatadogDriver) Send(key string, name string, Points [][2]float64, tags
 	return nil
 }
 
-func (dd *DatadogDriver) jsonify(name string, Points [][2]float64, tags *map[string]string) []byte {
+func (dd *DatadogDriver) jsonify(name string, Points []PtDataer, tags *map[string]string) []byte {
 	tv := func() []string {
 		t := *tags
 		l :=  len(t)
@@ -54,9 +54,13 @@ func (dd *DatadogDriver) jsonify(name string, Points [][2]float64, tags *map[str
 		}
 		return output
 	}()
+	points := make([][2]float64,len(Points))
+	for idx, p := range Points{
+		points[idx] = [2]float64{float64(p.Time().UTC().Unix()),p.Data()}
+	}
 	dm := datadogMetric{
 		Metric: name,
-		Points: Points,
+		Points: points,
 		Tags:   tv,
 	}
 	ds := datadogSeries{Series: []*datadogMetric{&dm}}

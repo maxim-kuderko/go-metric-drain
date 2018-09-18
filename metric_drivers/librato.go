@@ -1,10 +1,10 @@
 package metric_drivers
 
 import (
-	"net/http"
 	"bytes"
-	"encoding/json"
 	"encoding/base64"
+	"encoding/json"
+	"net/http"
 )
 
 type LibratoDriver struct {
@@ -17,7 +17,7 @@ func NewLibratoMetric(token string) *LibratoDriver {
 	return &LibratoDriver{url: "https://api.appoptics.com/v1/measurements", token: "Basic " + enc.EncodeToString([]byte(token + ":"))}
 }
 
-func (ld *LibratoDriver) Send(key string, name string, Points [][2]float64, tags *map[string]string) error {
+func (ld *LibratoDriver) Send(key string, name string, Points []PtDataer, tags *map[string]string) error {
 	jsonData := ld.jsonify(name, Points, tags)
 
 	req, _ := http.NewRequest("POST", ld.url, bytes.NewBuffer(jsonData))
@@ -32,7 +32,7 @@ func (ld *LibratoDriver) Send(key string, name string, Points [][2]float64, tags
 	return nil
 }
 
-func (ld *LibratoDriver) jsonify(name string, Points [][2]float64, tags *map[string]string) []byte {
+func (ld *LibratoDriver) jsonify(name string, Points []PtDataer, tags *map[string]string) []byte {
 	metrics := make([]*libratoMetric, 0, 2)
 	for _, v := range ld.aggregatePoints(name, Points){
 		metrics = append(metrics, v)
@@ -46,10 +46,11 @@ func (ld *LibratoDriver) jsonify(name string, Points [][2]float64, tags *map[str
 
 }
 
-func  (ld *LibratoDriver) aggregatePoints(name string, Points [][2]float64) map[int64]*libratoMetric{
+func  (ld *LibratoDriver) aggregatePoints(name string, Points []PtDataer) map[int64]*libratoMetric{
 	mp := map[int64]*libratoMetric{}
 	for _, p := range Points {
-		key := int64(p[0]) - int64(p[0]) % 60
+		t := p.Time().UTC().Unix()
+		key := int64(t) - int64(t) % 60
 		v, ok := mp[key]
 		if !ok{
 			mp[key] = &libratoMetric{}
@@ -59,13 +60,13 @@ func  (ld *LibratoDriver) aggregatePoints(name string, Points [][2]float64) map[
 			v.Time = key
 		}
 		v.Count++
-		v.Sum += p[1]
-		v.Last = p[1]
-		if p[1] < v.Min{
-			v.Min = p[1]
+		v.Sum += p.Data()
+		v.Last = p.Data()
+		if p.Data() < v.Min{
+			v.Min = p.Data()
 		}
-		if p[1] > v.Max{
-			v.Max = p[1]
+		if p.Data() > v.Max{
+			v.Max = p.Data()
 		}
 	}
 	return mp
