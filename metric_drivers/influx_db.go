@@ -85,6 +85,7 @@ func (ifdb *InfluxDB) buildBatch(name string, Points map[time.Time]*AggregatedPo
 	}
 
 	for t, point := range Points {
+		t.Add(time.Duration(time.Now().Nanosecond()))
 		p, err := client.NewPoint(name, *tags, map[string]interface{}{`count`: point.count, `sum`: point.sum, `min`: point.min, `max`: point.max, `last`: point.last}, t)
 		if err != nil {
 			continue
