@@ -15,14 +15,6 @@ type InfluxDB struct {
 }
 
 func NewInfluxDB(url, username, password, database, precision, retention string, aggregationResolution time.Duration) *InfluxDB {
-	c, err := client.NewHTTPClient(client.HTTPConfig{
-		Addr:     url,
-		Username: username,
-		Password: password,
-	})
-	if err != nil {
-		log.Fatal(err)
-	}
 	if aggregationResolution <= time.Second {
 		aggregationResolution = time.Second
 	}
