@@ -30,13 +30,13 @@ func (ifdb *InfluxDB) Send(key string, name string, Points []PtDataer, tags *map
 		Addr:     ifdb.url,
 		Username: ifdb.username,
 		Password: ifdb.password,
+		Timeout:  time.Second * 30,
 	})
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer c.Close()
 	if err := c.Write(batchPoints); err != nil {
-		log.Println(err)
 		return err
 	}
 	return nil
