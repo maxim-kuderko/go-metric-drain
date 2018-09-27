@@ -35,6 +35,7 @@ func (ml *MetricsLogger) prepare(name string, Points []PtDataer, tags *map[strin
 	for _, pt := range Points {
 		if b, err := json.Marshal(&MetricsLoggerMetric{Driver: ml.driver, Name: name, Tags: *tags, Value: pt.Data()}); err == nil {
 			output.Write(b)
+			output.WriteByte('\n')
 		}
 	}
 	return output
