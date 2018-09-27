@@ -7,11 +7,11 @@ import (
 )
 
 type InfluxDB struct {
-	c                     client.Client
-	database              string
-	precision             string
-	retention             string
-	aggregationResolution time.Duration
+	url, username, password string
+	database                string
+	precision               string
+	retention               string
+	aggregationResolution   time.Duration
 }
 
 func NewInfluxDB(url, username, password, database, precision, retention string, aggregationResolution time.Duration) *InfluxDB {
@@ -26,7 +26,7 @@ func NewInfluxDB(url, username, password, database, precision, retention string,
 	if aggregationResolution <= time.Second {
 		aggregationResolution = time.Second
 	}
-	return &InfluxDB{c: c, precision: precision, database: database, retention: retention, aggregationResolution: aggregationResolution}
+	return &InfluxDB{url: url, username: username, password: password, precision: precision, database: database, retention: retention, aggregationResolution: aggregationResolution}
 }
 
 func (ifdb *InfluxDB) Send(key string, name string, Points []PtDataer, tags *map[string]string) error {
@@ -34,7 +34,16 @@ func (ifdb *InfluxDB) Send(key string, name string, Points []PtDataer, tags *map
 	if err != nil {
 		return err
 	}
-	if err := ifdb.c.Write(batchPoints); err != nil {
+	c, err := client.NewHTTPClient(client.HTTPConfig{
+		Addr:     ifdb.url,
+		Username: ifdb.username,
+		Password: ifdb.password,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer c.Close()
+	if err := c.Write(batchPoints); err != nil {
 		log.Println(err)
 		return err
 	}
