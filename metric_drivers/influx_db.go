@@ -105,7 +105,9 @@ func (ifdb *InfluxDB) buildBatch(name string, Points map[string]map[time.Time]*A
 		Precision:       ifdb.precision,
 		RetentionPolicy: ifdb.retention,
 	})
-	return bp, err
+	if err != nil{
+		return nil, err
+	}
 	for _, tf := range Points {
 		for ts, point := range tf {
 			p, err := client.NewPoint(name, point.tags, map[string]interface{}{`count`: point.count, `sum`: point.sum, `min`: point.min, `max`: point.max, `last`: point.last}, ts.Add(time.Duration(time.Now().Nanosecond())))
