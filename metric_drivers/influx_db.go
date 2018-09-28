@@ -13,7 +13,7 @@ type InfluxDB struct {
 	retention               string
 	aggregationResolution   time.Duration
 	flushInterval           time.Duration
-	mp                      map[string]map[time.Time]*AggregatedPoint
+	mp                      map[string]map[string]map[time.Time]*AggregatedPoint
 	maxGroupSize            int
 	lastSend                time.Time
 	s                       sync.Mutex
@@ -23,7 +23,7 @@ func NewInfluxDB(url, username, password, database, precision, retention string,
 	if aggregationResolution <= time.Second {
 		aggregationResolution = time.Second
 	}
-	ifdb := &InfluxDB{url: url, username: username, password: password, precision: precision, database: database, retention: retention, aggregationResolution: aggregationResolution, flushInterval:flushInterval, lastSend: time.Now(),}
+	ifdb := &InfluxDB{url: url, username: username, password: password, precision: precision, database: database, retention: retention, aggregationResolution: aggregationResolution, flushInterval: flushInterval, lastSend: time.Now(),}
 	ifdb.swapMp()
 	return ifdb
 }
@@ -60,14 +60,17 @@ func (ifdb *InfluxDB) Send(key string, name string, Points []PtDataer, tags *map
 	return nil
 }
 
-func (ifdb *InfluxDB) aggregatePoints(key string, tags *map[string]string, Points []PtDataer) {
+func (ifdb *InfluxDB) aggregatePoints(name string, key string, tags *map[string]string, Points []PtDataer) {
 	for _, p := range Points {
 		timekey := time.Unix(0, p.Time().Add(-1 * time.Duration(p.Time().UnixNano()%int64(ifdb.aggregationResolution.Nanoseconds()))).UnixNano())
-		if _, ok := ifdb.mp[key]; !ok {
-			ifdb.mp[key] = make(map[time.Time]*AggregatedPoint)
+		if _, ok := ifdb.mp[name]; !ok {
+			ifdb.mp[name] = make(map[string]map[time.Time]*AggregatedPoint)
 		}
-		if _, ok := ifdb.mp[key][timekey]; !ok {
-			ifdb.mp[key][timekey] = &AggregatedPoint{
+		if _, ok := ifdb.mp[name][key]; !ok {
+			ifdb.mp[name][key] = make(map[time.Time]*AggregatedPoint)
+		}
+		if _, ok := ifdb.mp[name][key][timekey]; !ok {
+			ifdb.mp[name][key][timekey] = &AggregatedPoint{
 				sum:   p.Data(),
 				count: 1,
 				min:   p.Data(),
@@ -77,14 +80,14 @@ func (ifdb *InfluxDB) aggregatePoints(key string, tags *map[string]string, Point
 			}
 			continue
 		}
-		ifdb.mp[key][timekey].sum += p.Data()
-		ifdb.mp[key][timekey].count++
-		ifdb.mp[key][timekey].last = p.Data()
-		if p.Data() < ifdb.mp[key][timekey].min {
-			ifdb.mp[key][timekey].min = p.Data()
+		ifdb.mp[name][key][timekey].sum += p.Data()
+		ifdb.mp[name][key][timekey].count++
+		ifdb.mp[name][key][timekey].last = p.Data()
+		if p.Data() < ifdb.mp[name][key][timekey].min {
+			ifdb.mp[name][key][timekey].min = p.Data()
 		}
-		if p.Data() > ifdb.mp[key][timekey].max {
-			ifdb.mp[key][timekey].max = p.Data()
+		if p.Data() > ifdb.mp[name][key][timekey].max {
+			ifdb.mp[name][key][timekey].max = p.Data()
 		}
 
 		if len(ifdb.mp[key]) > ifdb.maxGroupSize {
@@ -99,24 +102,26 @@ type AggregatedPoint struct {
 	tags                       map[string]string
 }
 
-func (ifdb *InfluxDB) buildBatch(name string, Points map[string]map[time.Time]*AggregatedPoint) (client.BatchPoints, error) {
+func (ifdb *InfluxDB) buildBatch(name string, Points map[string]map[string]map[time.Time]*AggregatedPoint) (client.BatchPoints, error) {
 	bp, err := client.NewBatchPoints(client.BatchPointsConfig{
 		Database:        ifdb.database,
 		Precision:       ifdb.precision,
 		RetentionPolicy: ifdb.retention,
 	})
-	if err != nil{
+	if err != nil {
 		return nil, err
 	}
-	for _, tf := range Points {
-		for ts, point := range tf {
-			p, err := client.NewPoint(name, point.tags, map[string]interface{}{`count`: point.count, `sum`: point.sum, `min`: point.min, `max`: point.max, `last`: point.last}, ts.Add(time.Duration(time.Now().Nanosecond())))
-			if err != nil {
-				continue
-			}
-			bp.AddPoint(p)
-		}
 
+	for name, aggPoints := range Points {
+		for _, tf := range aggPoints {
+			for ts, point := range tf {
+				p, err := client.NewPoint(name, point.tags, map[string]interface{}{`count`: point.count, `sum`: point.sum, `min`: point.min, `max`: point.max, `last`: point.last}, ts.Add(time.Duration(time.Now().Nanosecond())))
+				if err != nil {
+					continue
+				}
+				bp.AddPoint(p)
+			}
+		}
 	}
 	Points = nil
 
@@ -125,6 +130,6 @@ func (ifdb *InfluxDB) buildBatch(name string, Points map[string]map[time.Time]*A
 
 func (ifdb *InfluxDB) swapMp() (map[string]map[time.Time]*AggregatedPoint) {
 	tmp := ifdb.mp
-	ifdb.mp = make(map[string]map[time.Time]*AggregatedPoint)
+	ifdb.mp = make(map[string]map[string]map[time.Time]*AggregatedPoint)
 	return tmp
 }
