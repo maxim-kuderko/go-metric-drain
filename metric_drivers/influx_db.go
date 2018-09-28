@@ -2,7 +2,6 @@ package metric_drivers
 
 import (
 	"github.com/influxdata/influxdb/client/v2"
-	"log"
 	"sync"
 	"time"
 )
@@ -55,7 +54,6 @@ func (ifdb *InfluxDB) Send(key string, name string, Points []PtDataer, tags *map
 			return
 		}
 		defer c.Close()
-		log.Println(".")
 		c.Write(batchPoints)
 	}()
 
