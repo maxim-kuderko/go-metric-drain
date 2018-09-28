@@ -31,7 +31,7 @@ func NewInfluxDB(url, username, password, database, precision, retention string,
 func (ifdb *InfluxDB) Send(key string, name string, Points []PtDataer, tags *map[string]string) error {
 	ifdb.s.Lock()
 	defer ifdb.s.Unlock()
-	ifdb.aggregatePoints(key, tags, Points)
+	ifdb.aggregatePoints(name, key, tags, Points)
 	if time.Now().Sub(ifdb.lastSend).Seconds() < ifdb.flushInterval.Seconds() {
 		return nil
 	}
@@ -128,7 +128,7 @@ func (ifdb *InfluxDB) buildBatch(name string, Points map[string]map[string]map[t
 	return bp, nil
 }
 
-func (ifdb *InfluxDB) swapMp() (map[string]map[time.Time]*AggregatedPoint) {
+func (ifdb *InfluxDB) swapMp() (map[string]map[string]map[time.Time]*AggregatedPoint) {
 	tmp := ifdb.mp
 	ifdb.mp = make(map[string]map[string]map[time.Time]*AggregatedPoint)
 	return tmp
