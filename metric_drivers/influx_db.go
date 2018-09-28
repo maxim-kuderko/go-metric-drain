@@ -34,7 +34,6 @@ func (ifdb *InfluxDB) Send(key string, name string, Points []PtDataer, tags *map
 		return err
 	}
 	if len(batchPoints.Points()) < 1000 && time.Now().Sub(ifdb.lastSend).Seconds() < 10{
-		log.Println("*")
 		return nil
 	}
 	c, err := client.NewHTTPClient(client.HTTPConfig{
@@ -56,7 +55,6 @@ func (ifdb *InfluxDB) Send(key string, name string, Points []PtDataer, tags *map
 	ifdb.buff = bp
 	go func() {
 		c.Write(batchPoints)
-		log.Println(".")
 	}()
 
 	return nil
