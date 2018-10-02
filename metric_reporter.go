@@ -52,7 +52,7 @@ func (mr *MetricReporter) gc() {
 			defer mr.m.Unlock()
 			t := time.Now()
 			for k, v := range mr.mMap {
-				if t.Sub(v.lastUpdated()).Seconds() > 10*60 {
+				if t.Sub(v.lastUpdated()).Seconds() > float64(mr.interval * int(time.Second) * 2) {
 					go v.flush(false, true, true)
 					delete(mr.mMap, k)
 				}
