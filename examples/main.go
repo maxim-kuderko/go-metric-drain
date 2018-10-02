@@ -4,38 +4,30 @@ import (
 	"github.com/maxim-kuderko/metric-reporter"
 	"github.com/maxim-kuderko/metric-reporter/metric_drivers"
 	"log"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 )
 
 func main() {
+	go func() {
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop)
 
-	ldriver := metric_drivers.NewLibratoMetric("62e23fe238528b28418eac212922b2f254af530bad181fb41137f962e8637020")
+	ldriver := metric_drivers.NewMetricsLogger(`influxdb-telemtry`, "https://metrics-logger.spot.im/metric", ``)
 	cdriver := metric_drivers.NewMysqlCounter("root:getalife@tcp(localhost:3306)/metrics", "counters", 130)
 
-	reporter, err := metric_reporter.NewMetricsReporter([]metric_drivers.DriverInterface{ldriver}, []metric_drivers.DriverInterface{cdriver}, 10, 2000000000, "example_app", map[string]string{"env": "test"})
-	pool := 16
-	sem := make(chan bool, pool)
-	for i := 0; i < pool; i++ {
-		sem <- true
-	}
+	reporter, err := metric_reporter.NewMetricsReporter([]metric_drivers.DriverInterface{ldriver}, []metric_drivers.DriverInterface{cdriver}, 1, 10000, "metric-logger-driver", map[string]string{"env": "test"})
+
 	go func() {
-		for i := 0.0; i < 999999.0; i++ {
-			<-sem
-			go func(i float64) {
-				reporter.Send("test.metric1", int64(i), map[string]string{"test": "test1"})
-				reporter.Send("test.metric1", int64(i), map[string]string{"test": "test2"})
-				reporter.Count("test.metric1", i, map[string]string{"test": "test2"})
-				reporter.Count("test.metric1", -i, map[string]string{"test": "test2"})
-				reporter.Count("test.metric2", 1, map[string]string{"test": "test2"})
-				reporter.Count("test.metric2", -1, map[string]string{"test": "test2"})
-				reporter.Count("test.metric3", 1, map[string]string{"test": "test2"}, 11)
-				reporter.Count("test.metric4", 1, map[string]string{"test": "test2"})
-				sem <- true
-			}(i)
+		for i := 0; i < 10; i++ {
+			reporter.Send("mytest.metric1", 1, map[string]string{"test": "test1"})
+			reporter.Send("mytest.metric1", 1, map[string]string{"test": "test2"})
 		}
+		log.Println("done")
 	}()
 
 	go func() {

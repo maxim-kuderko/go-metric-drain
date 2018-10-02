@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"github.com/maxim-kuderko/metric-reporter/metric_drivers"
 	"sync"
+	"time"
 )
 
 type MetricReporter struct {
@@ -38,7 +39,25 @@ func NewMetricsReporter(
 		baseTags:       baseTags,
 		errors:         errors,
 	}
+	go mc.gc()
 	return mc, errors
+}
+
+// backward comparability
+func (mr *MetricReporter) gc() {
+	mr.m.Lock()
+	defer mr.m.Unlock()
+	ticker := time.NewTicker(time.Minute * 10)
+	for range ticker.C {
+		t := time.Now()
+		for k, v := range mr.mMap {
+			if t.Sub(v.birthTime).Seconds() > 10*60 {
+				go v.flush(false, true, true)
+				delete(mr.mMap, k)
+			}
+		}
+	}
+
 }
 
 // backward comparability
