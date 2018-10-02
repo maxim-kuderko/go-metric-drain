@@ -4,16 +4,15 @@ import (
 	"github.com/maxim-kuderko/metric-reporter"
 	"github.com/maxim-kuderko/metric-reporter/metric_drivers"
 	"log"
-	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
 )
 
 func main() {
-	go func() {
+	/*go func() {
 		log.Println(http.ListenAndServe("localhost:6060", nil))
-	}()
+	}()*/
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop)
 
