@@ -103,3 +103,9 @@ func (mc *MetricsCollection) flush(timer bool, shouldLock bool, shouldWait bool)
 		w.Wait()
 	}
 }
+
+func (mc *MetricsCollection) lastUpdated() time.Time{
+	mc.Lock()
+	defer mc.Unlock()
+	return mc.birthTime
+}
