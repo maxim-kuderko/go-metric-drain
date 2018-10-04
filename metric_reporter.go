@@ -45,14 +45,14 @@ func NewMetricsReporter(
 
 // backward comparability
 func (mr *MetricReporter) gc() {
-	ticker := time.NewTicker(time.Minute)
+	ticker := time.NewTicker(time.Minute * 5)
 	for range ticker.C {
 		func() {
 			mr.m.Lock()
 			defer mr.m.Unlock()
 			t := time.Now()
 			for k, v := range mr.mMap {
-				if t.Sub(v.lastUpdated()).Seconds() > float64(mr.interval * 2) {
+				if t.Sub(v.lastUpdated()).Seconds() > float64(mr.interval*2) {
 					go v.flush(false, true, true)
 					delete(mr.mMap, k)
 				}
