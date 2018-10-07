@@ -50,14 +50,13 @@ func (mr *MetricReporter) gc() {
 		func() {
 			mr.m.Lock()
 			defer mr.m.Unlock()
-			newMap := map[string]*MetricsCollection{}
 			tmp := mr.mMap
-			mr.mMap = newMap
+			mr.mMap = map[string]*MetricsCollection{}
 			go func(m map[string]*MetricsCollection) {
 				for _, v := range tmp {
 					go v.flush(false, true, true)
 				}
-				mr.mMap = nil
+				tmp = nil
 			}(tmp)
 
 		}()
