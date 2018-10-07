@@ -50,13 +50,16 @@ func (mr *MetricReporter) gc() {
 		func() {
 			mr.m.Lock()
 			defer mr.m.Unlock()
-			t := time.Now()
-			for k, v := range mr.mMap {
-				if t.Sub(v.lastUpdated()).Seconds() > float64(mr.interval*2) {
+			newMap := map[string]*MetricsCollection{}
+			tmp := mr.mMap
+			mr.mMap = newMap
+			go func(m map[string]*MetricsCollection) {
+				for _, v := range tmp {
 					go v.flush(false, true, true)
-					delete(mr.mMap, k)
 				}
-			}
+				mr.mMap = nil
+			}(tmp)
+
 		}()
 	}
 
