@@ -23,7 +23,7 @@ func NewInfluxDB(url, username, password, database, precision, retention string,
 	if aggregationResolution <= time.Second {
 		aggregationResolution = time.Second
 	}
-	ifdb := &InfluxDB{url: url, username: username, password: password, precision: precision, database: database, retention: retention, aggregationResolution: aggregationResolution, flushInterval: flushInterval, lastSend: time.Now(),}
+	ifdb := &InfluxDB{url: url, username: username, password: password, precision: precision, database: database, retention: retention, aggregationResolution: aggregationResolution, flushInterval: flushInterval, lastSend: time.Now()}
 	ifdb.swapMp()
 	return ifdb
 }
@@ -62,7 +62,7 @@ func (ifdb *InfluxDB) Send(key string, name string, Points []PtDataer, tags *map
 
 func (ifdb *InfluxDB) aggregatePoints(name string, key string, tags *map[string]string, Points []PtDataer) {
 	for _, p := range Points {
-		timekey := time.Unix(0, p.Time().Add(-1 * time.Duration(p.Time().UnixNano()%int64(ifdb.aggregationResolution.Nanoseconds()))).UnixNano())
+		timekey := time.Unix(0, p.Time().Add(-1*time.Duration(p.Time().UnixNano()%int64(ifdb.aggregationResolution.Nanoseconds()))).UnixNano())
 		if _, ok := ifdb.mp[name]; !ok {
 			ifdb.mp[name] = make(map[string]map[time.Time]*AggregatedPoint)
 		}
@@ -115,7 +115,7 @@ func (ifdb *InfluxDB) buildBatch(name string, Points map[string]map[string]map[t
 	for name, aggPoints := range Points {
 		for _, tf := range aggPoints {
 			for ts, point := range tf {
-				p, err := client.NewPoint(name, point.tags, map[string]interface{}{`count`: point.count, `sum`: point.sum, `min`: point.min, `max`: point.max, `last`: point.last}, ts.Add(time.Duration(time.Now().Nanosecond())))
+				p, err := client.NewPoint(name, point.tags, map[string]interface{}{`count`: point.count, `sum`: point.sum, `min`: point.min, `max`: point.max, `last`: point.last, `average`: point.sum / point.count}, ts.Add(time.Duration(time.Now().Nanosecond())))
 				if err != nil {
 					continue
 				}
@@ -128,7 +128,7 @@ func (ifdb *InfluxDB) buildBatch(name string, Points map[string]map[string]map[t
 	return bp, nil
 }
 
-func (ifdb *InfluxDB) swapMp() (map[string]map[string]map[time.Time]*AggregatedPoint) {
+func (ifdb *InfluxDB) swapMp() map[string]map[string]map[time.Time]*AggregatedPoint {
 	tmp := ifdb.mp
 	ifdb.mp = make(map[string]map[string]map[time.Time]*AggregatedPoint)
 	return tmp

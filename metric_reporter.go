@@ -26,7 +26,7 @@ type MetricReporter struct {
 func NewMetricsReporter(
 	metricDrivers []metric_drivers.DriverInterface,
 	counterDrivers []metric_drivers.DriverInterface,
-	interval int, maxMetrics int, prefix string, baseTags map[string]string) (mc *MetricReporter, errors chan error) {
+	interval int, maxMetrics int, gcFreq time.Duration, prefix string, baseTags map[string]string) (mc *MetricReporter, errors chan error) {
 	errors = make(chan error, 1000)
 	mc = &MetricReporter{
 		metricDrivers:  metricDrivers,
@@ -39,13 +39,13 @@ func NewMetricsReporter(
 		baseTags:       baseTags,
 		errors:         errors,
 	}
-	go mc.gc()
+	go mc.gc(gcFreq)
 	return mc, errors
 }
 
 // backward comparability
-func (mr *MetricReporter) gc() {
-	ticker := time.NewTicker(time.Minute * 5)
+func (mr *MetricReporter) gc(gcFreq time.Duration) {
+	ticker := time.NewTicker(gcFreq)
 	for range ticker.C {
 		func() {
 			mr.m.Lock()
