@@ -15,7 +15,7 @@ func NewMetricsLogger(driver, url, key string) *MetricsLogger {
 	return &MetricsLogger{driver: driver, url: url, key: key}
 }
 
-func (ml *MetricsLogger) Send(key string, name string, Points []PtDataer, tags *map[string]string) error {
+func (ml *MetricsLogger) Send(key uint64, name string, Points []PtDataer, tags *map[string]string) error {
 	body := ml.prepare(name, Points, tags)
 
 	req, _ := http.NewRequest("POST", ml.url, body)

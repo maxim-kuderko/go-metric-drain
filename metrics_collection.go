@@ -1,9 +1,8 @@
 package metric_reporter
 
 import (
-	"encoding/hex"
-	"github.com/cespare/xxhash"
 	"github.com/maxim-kuderko/metric-reporter/metric_drivers"
+	"hash/fnv"
 	"io"
 	"sort"
 	"strings"
@@ -15,16 +14,15 @@ type MetricsCollection struct {
 	name       string
 	points     []metric_drivers.PtDataer
 	tags       map[string]string
-	hash       string
+	hash       uint64
 	interval   int
 	maxMetrics int
 	birthTime  time.Time
-	drivers     []metric_drivers.DriverInterface
+	drivers    []metric_drivers.DriverInterface
 	errors     chan error
 	count      int64
 	sync.Mutex
 }
-
 
 func newMetricsCollection(name string, point float64, tags map[string]string, interval int, maxMetrics int, drivers []metric_drivers.DriverInterface, errors chan error) *MetricsCollection {
 	r := MetricsCollection{
@@ -34,7 +32,7 @@ func newMetricsCollection(name string, point float64, tags map[string]string, in
 		interval:   interval,
 		maxMetrics: maxMetrics,
 		birthTime:  time.Now(),
-		drivers:     drivers,
+		drivers:    drivers,
 		errors:     errors,
 	}
 	r.calcHash()
@@ -42,19 +40,17 @@ func newMetricsCollection(name string, point float64, tags map[string]string, in
 }
 
 func (mc *MetricsCollection) calcHash() {
-	hasher := xxhash.New()
-
+	hasher := fnv.New64()
 	io.WriteString(hasher, mc.name)
 	if mc.tags != nil {
 		d := make([]string, 0, len(mc.tags))
 		for _, v := range mc.tags {
-			d = append(d,v)
+			d = append(d, v)
 		}
 		sort.Strings(d)
 		io.WriteString(hasher, strings.Join(d, ""))
 	}
-
-	mc.hash = hex.EncodeToString(hasher.Sum(nil))
+	mc.hash = hasher.Sum64()
 }
 
 func (mc *MetricsCollection) merge(newMc *MetricsCollection) {
@@ -76,7 +72,7 @@ func (mc *MetricsCollection) flushTime() {
 
 }
 
-func (mc *MetricsCollection) flush(timer bool, shouldLock bool, shouldWait bool){
+func (mc *MetricsCollection) flush(timer bool, shouldLock bool, shouldWait bool) {
 	if shouldLock {
 		mc.Lock()
 		defer mc.Unlock()
@@ -87,24 +83,23 @@ func (mc *MetricsCollection) flush(timer bool, shouldLock bool, shouldWait bool)
 	w := sync.WaitGroup{}
 	w.Add(len(mc.drivers))
 
-	for _, d := range mc.drivers{
-		go func(d metric_drivers.DriverInterface, pos []metric_drivers.PtDataer,) {
+	for _, d := range mc.drivers {
+		go func(d metric_drivers.DriverInterface, pos []metric_drivers.PtDataer) {
 			defer w.Done()
-			if err := d.Send(mc.hash, mc.name, pos, &mc.tags); err != nil{
+			if err := d.Send(mc.hash, mc.name, pos, &mc.tags); err != nil {
 				mc.errors <- err
 			}
 		}(d, mc.points)
 	}
 
-
-	mc.points = make([]metric_drivers.PtDataer,0,mc.maxMetrics)
+	mc.points = make([]metric_drivers.PtDataer, 0, mc.maxMetrics)
 	mc.birthTime = time.Now()
-	if shouldWait{
+	if shouldWait {
 		w.Wait()
 	}
 }
 
-func (mc *MetricsCollection) lastUpdated() time.Time{
+func (mc *MetricsCollection) lastUpdated() time.Time {
 	mc.Lock()
 	defer mc.Unlock()
 	return mc.birthTime

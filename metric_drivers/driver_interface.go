@@ -5,7 +5,7 @@ import (
 )
 
 type DriverInterface interface {
-	Send(key string, name string, Points []PtDataer, tags *map[string]string) error
+	Send(key uint64, name string, Points []PtDataer, tags *map[string]string) error
 }
 
 type PtDataer interface {
@@ -13,23 +13,22 @@ type PtDataer interface {
 	Data() float64
 }
 
-
-type PtData struct{
+type PtData struct {
 	t time.Time
 	d float64
 }
-func (pt *PtData) Time() time.Time{
+
+func (pt *PtData) Time() time.Time {
 	return pt.t
 }
 
-func (pt *PtData) Data() float64{
+func (pt *PtData) Data() float64 {
 	return pt.d
 }
 
-
-func NewPoint(ts time.Time, d float64) * PtData{
+func NewPoint(ts time.Time, d float64) *PtData {
 	return &PtData{
-		t:ts,
-		d:d,
+		t: ts,
+		d: d,
 	}
 }
