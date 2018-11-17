@@ -10,8 +10,8 @@ import (
 type MetricReporter struct {
 	metricDrivers  []metric_drivers.DriverInterface
 	counterDrivers []metric_drivers.DriverInterface
-	mMap           map[string]*MetricsCollection
-	cMap           map[string]*MetricsCollection
+	mMap           map[uint64]*MetricsCollection
+	cMap           map[uint64]*MetricsCollection
 	open           bool
 	interval       int
 	maxMetrics     int
@@ -31,8 +31,8 @@ func NewMetricsReporter(
 	mc = &MetricReporter{
 		metricDrivers:  metricDrivers,
 		counterDrivers: counterDrivers,
-		mMap:           map[string]*MetricsCollection{},
-		cMap:           map[string]*MetricsCollection{},
+		mMap:           map[uint64]*MetricsCollection{},
+		cMap:           map[uint64]*MetricsCollection{},
 		interval:       interval,
 		maxMetrics:     maxMetrics,
 		prefix:         prefix,
@@ -51,8 +51,8 @@ func (mr *MetricReporter) gc(gcFreq time.Duration) {
 			mr.m.Lock()
 			defer mr.m.Unlock()
 			tmp := mr.mMap
-			mr.mMap = map[string]*MetricsCollection{}
-			go func(m map[string]*MetricsCollection) {
+			mr.mMap = map[uint64]*MetricsCollection{}
+			go func(m map[uint64]*MetricsCollection) {
 				for _, v := range tmp {
 					go v.flush(false, true, true)
 				}
