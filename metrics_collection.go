@@ -20,6 +20,7 @@ type MetricsCollection struct {
 	birthTime  time.Time
 	drivers    []metric_drivers.DriverInterface
 	errors     chan error
+	close      chan bool
 	count      int64
 	sync.Mutex
 }
@@ -34,6 +35,7 @@ func newMetricsCollection(name string, point float64, tags map[string]string, in
 		birthTime:  time.Now(),
 		drivers:    drivers,
 		errors:     errors,
+		close:      make(chan bool, 1),
 	}
 	r.calcHash()
 	return &r
@@ -58,7 +60,6 @@ func (mc *MetricsCollection) merge(newMc *MetricsCollection) {
 	defer mc.Unlock()
 	mc.points = append(mc.points, newMc.points...)
 	if len(mc.points) >= mc.maxMetrics {
-
 		mc.flush(false, false, false)
 	}
 }
@@ -66,8 +67,15 @@ func (mc *MetricsCollection) merge(newMc *MetricsCollection) {
 func (mc *MetricsCollection) flushTime() {
 	ticker := time.NewTicker(time.Second)
 	for {
-		<-ticker.C
-		mc.flush(true, true, false)
+		select {
+		case <-ticker.C:
+			mc.flush(true, true, false)
+		case <-mc.close:
+			mc.flush(true, true, false)
+			ticker.Stop()
+			return
+
+		}
 	}
 
 }

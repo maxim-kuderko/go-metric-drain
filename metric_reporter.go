@@ -54,7 +54,7 @@ func (mr *MetricReporter) gc(gcFreq time.Duration) {
 			mr.mMap = map[uint64]*MetricsCollection{}
 			go func(m map[uint64]*MetricsCollection) {
 				for _, v := range tmp {
-					go v.flush(false, true, true)
+					v.close <- true
 				}
 				tmp = nil
 			}(tmp)
