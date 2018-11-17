@@ -2,113 +2,62 @@ package metric_reporter
 
 import (
 	"github.com/maxim-kuderko/metric-reporter/metric_drivers"
-	"hash/fnv"
-	"io"
-	"sort"
-	"strings"
 	"sync"
 	"time"
 )
 
 type MetricsCollection struct {
-	name       string
-	points     []metric_drivers.PtDataer
-	tags       map[string]string
-	hash       uint64
-	interval   int
-	maxMetrics int
-	birthTime  time.Time
-	drivers    []metric_drivers.DriverInterface
-	errors     chan error
-	close      chan bool
-	count      int64
+	name            string
+	aggregatedPoint metric_drivers.AggregatedPoint
+	tags            map[string]string
+	hash            uint64
+	timeFrame       time.Time
+	updatedAt       time.Time
 	sync.Mutex
 }
 
-func newMetricsCollection(name string, point float64, tags map[string]string, interval int, maxMetrics int, drivers []metric_drivers.DriverInterface, errors chan error) *MetricsCollection {
-	r := MetricsCollection{
-		name:       name,
-		points:     []metric_drivers.PtDataer{metric_drivers.NewPoint(time.Now(), point)},
-		tags:       tags,
-		interval:   interval,
-		maxMetrics: maxMetrics,
-		birthTime:  time.Now(),
-		drivers:    drivers,
-		errors:     errors,
-		close:      make(chan bool, 1),
+func newMetricsCollection(timeFrame int64, name string, value float64, valueTags map[string]string, baseTags map[string]string) *MetricsCollection {
+	tags := baseTags
+	for k, v := range valueTags {
+		tags[k] = v
 	}
-	r.calcHash()
+	r := MetricsCollection{
+		timeFrame: time.Unix(0, timeFrame),
+		name:      name,
+		tags:      tags,
+		aggregatedPoint: metric_drivers.AggregatedPoint{
+			Min: value,
+			Max: value,
+		},
+	}
 	return &r
 }
 
-func (mc *MetricsCollection) calcHash() {
-	hasher := fnv.New64()
-	io.WriteString(hasher, mc.name)
-	if mc.tags != nil {
-		d := make([]string, 0, len(mc.tags))
-		for _, v := range mc.tags {
-			d = append(d, v)
-		}
-		sort.Strings(d)
-		io.WriteString(hasher, strings.Join(d, ""))
-	}
-	mc.hash = hasher.Sum64()
-}
-
-func (mc *MetricsCollection) merge(newMc *MetricsCollection) {
+func (mc *MetricsCollection) merge(metric Metric) {
 	mc.Lock()
 	defer mc.Unlock()
-	mc.points = append(mc.points, newMc.points...)
-	if len(mc.points) >= mc.maxMetrics {
-		mc.flush(false, false, false)
+
+	mc.aggregatedPoint.Sum += metric.value
+	mc.aggregatedPoint.Count += 1
+	mc.aggregatedPoint.Last = metric.value
+	if mc.aggregatedPoint.Min > metric.value {
+		mc.aggregatedPoint.Min = metric.value
 	}
+	if mc.aggregatedPoint.Max < metric.value {
+		mc.aggregatedPoint.Max = metric.value
+	}
+
+	mc.updatedAt = time.Now()
 }
 
-func (mc *MetricsCollection) flushTime() {
-	ticker := time.NewTicker(time.Second)
-	for {
-		select {
-		case <-ticker.C:
-			mc.flush(true, true, false)
-		case <-mc.close:
-			mc.flush(true, true, false)
-			ticker.Stop()
-			return
-
-		}
-	}
-
-}
-
-func (mc *MetricsCollection) flush(timer bool, shouldLock bool, shouldWait bool) {
-	if shouldLock {
-		mc.Lock()
-		defer mc.Unlock()
-	}
-	if len(mc.points) == 0 || (timer && time.Since(mc.birthTime).Seconds() < float64(mc.interval)) {
-		return
-	}
-	w := sync.WaitGroup{}
-	w.Add(len(mc.drivers))
-
-	for _, d := range mc.drivers {
-		go func(d metric_drivers.DriverInterface, pos []metric_drivers.PtDataer) {
-			defer w.Done()
-			if err := d.Send(mc.hash, mc.name, pos, &mc.tags); err != nil {
-				mc.errors <- err
-			}
-		}(d, mc.points)
-	}
-
-	mc.points = make([]metric_drivers.PtDataer, 0, mc.maxMetrics)
-	mc.birthTime = time.Now()
-	if shouldWait {
-		w.Wait()
-	}
+func (mc *MetricsCollection) points() metric_drivers.AggregatedPoint {
+	mc.Lock()
+	defer mc.Unlock()
+	return mc.aggregatedPoint
 }
 
 func (mc *MetricsCollection) lastUpdated() time.Time {
 	mc.Lock()
 	defer mc.Unlock()
-	return mc.birthTime
+	return mc.updatedAt
 }

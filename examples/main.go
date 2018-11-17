@@ -1,37 +1,43 @@
 package main
 
 import (
+	"fmt"
 	"github.com/maxim-kuderko/metric-reporter"
 	"github.com/maxim-kuderko/metric-reporter/metric_drivers"
 	"log"
+	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
+	"strconv"
 	"time"
 )
 
 func main() {
-	/*go func() {
+	go func() {
 		log.Println(http.ListenAndServe("localhost:6060", nil))
-	}()*/
+	}()
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop)
 
-	ldriver := metric_drivers.NewMetricsLogger(`influxdb-telemtry`, "", ``)
-	cdriver := metric_drivers.NewMysqlCounter("root:getalife@tcp(localhost:3306)/metrics", "counters", 130)
+	ldriver := metric_drivers.NewInfluxDB(``, ``, ``, ``, ``, ``, time.Minute, 2000)
 
 	reporter, err := metric_reporter.NewMetricsReporter(
 		[]metric_drivers.DriverInterface{ldriver},
-		[]metric_drivers.DriverInterface{cdriver},
-		1, 10000, time.Minute*30, "metric-logger-driver",
+		time.Second*2, time.Second*10, time.Minute*10, "metric-logger-driver",
 		map[string]string{"env": "test"},
 	)
 
 	go func() {
-		for i := 0; i < 10; i++ {
-			reporter.Send("mytest.metric1", 1, map[string]string{"test": "test1"})
-			reporter.Send("mytest.metric1", 1, map[string]string{"test": "test2"})
+		for j := 0; j < 10000000; j++ {
+			if j%1000 == 0 {
+				fmt.Println(j)
+			}
+			for i := 0; i < 1000; i++ {
+				reporter.Send("mytest.metric1", 1, map[string]string{"test": strconv.Itoa(i), "test2": strconv.Itoa(j / 1000)})
+			}
 		}
+
 		log.Println("done")
 	}()
 

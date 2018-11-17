@@ -1,34 +1,11 @@
 package metric_drivers
 
-import (
-	"time"
-)
+import "time"
 
 type DriverInterface interface {
-	Send(key uint64, name string, Points []PtDataer, tags *map[string]string) error
+	Send(key uint64, name string, Point AggregatedPoint, tags map[string]string, time time.Time) error
 }
 
-type PtDataer interface {
-	Time() time.Time
-	Data() float64
-}
-
-type PtData struct {
-	t time.Time
-	d float64
-}
-
-func (pt *PtData) Time() time.Time {
-	return pt.t
-}
-
-func (pt *PtData) Data() float64 {
-	return pt.d
-}
-
-func NewPoint(ts time.Time, d float64) *PtData {
-	return &PtData{
-		t: ts,
-		d: d,
-	}
+type AggregatedPoint struct {
+	Sum, Count, Last, Min, Max float64
 }
