@@ -34,7 +34,9 @@ func (ifdb *InfluxDB) flushInterval(interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	for range ticker.C {
 		ifdb.s.Lock()
-		ifdb.flush()
+		if len(ifdb.cache) > 0 && ifdb.lastSend.Add(interval).After(time.Now()) {
+			ifdb.flush()
+		}
 		ifdb.s.Unlock()
 	}
 }
@@ -59,11 +61,11 @@ func (ifdb *InfluxDB) flush() {
 	tmp := ifdb.cache
 	ifdb.cache = make([]pt, 0, ifdb.maxSize)
 	ifdb.lastSend = time.Now()
-	go func(tmp []pt) {
-		batchPoints, err := ifdb.buildBatch(tmp)
-		if err != nil {
-			return
-		}
+	batchPoints, err := ifdb.buildBatch(tmp)
+	if err != nil {
+		return
+	}
+	go func(bp client.BatchPoints) {
 		c, err := client.NewHTTPClient(client.HTTPConfig{
 			Addr:     ifdb.url,
 			Username: ifdb.username,
@@ -73,8 +75,9 @@ func (ifdb *InfluxDB) flush() {
 			return
 		}
 		defer c.Close()
-		c.Write(batchPoints)
-	}(tmp)
+		c.Write(bp)
+	}(batchPoints)
+
 }
 
 func (ifdb *InfluxDB) buildBatch(points []pt) (client.BatchPoints, error) {
@@ -86,7 +89,6 @@ func (ifdb *InfluxDB) buildBatch(points []pt) (client.BatchPoints, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	for _, pt := range points {
 		p, err := client.NewPoint(pt.name, pt.tags, map[string]interface{}{`count`: pt.point.Count, `sum`: pt.point.Sum, `min`: pt.point.Min, `max`: pt.point.Max, `last`: pt.point.Last, `average`: pt.point.Sum / pt.point.Count}, pt.time)
 		if err != nil {

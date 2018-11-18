@@ -56,7 +56,6 @@ func (mr *MetricReporter) gc(gcFreq time.Duration) {
 
 		}()
 	}
-
 }
 
 // backward comparability

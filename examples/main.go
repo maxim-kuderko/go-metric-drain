@@ -33,7 +33,7 @@ func main() {
 			if j%1000 == 0 {
 				fmt.Println(j)
 			}
-			for i := 0; i < 1000; i++ {
+			for i := 0; i < 2000; i++ {
 				reporter.Send("mytest.metric1", 1, map[string]string{"test": strconv.Itoa(i), "test2": strconv.Itoa(j / 1000)})
 			}
 		}
