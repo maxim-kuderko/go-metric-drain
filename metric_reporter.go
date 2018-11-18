@@ -97,7 +97,7 @@ func (mr *MetricReporter) Metric(name string, val float64, tags map[string]strin
 func (mr *MetricReporter) Wait() {
 	mr.m.Lock()
 	wg := sync.WaitGroup{}
-	wg.Add(len(mr.mMap) + len(mr.mMap))
+	wg.Add(len(mr.mMap))
 	go func() {
 		for _, tf := range mr.mMap {
 			for _, v := range tf {
