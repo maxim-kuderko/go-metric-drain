@@ -14,6 +14,7 @@ type MetricsCollection struct {
 	timeFrame       time.Time
 	updatedAt       time.Time
 	flushedAt       time.Time
+	isNew           bool
 	sync.Mutex
 }
 
@@ -26,15 +27,13 @@ func newMetricsCollection(timeFrame int64, name string, value float64, valueTags
 		tags[k] = v
 	}
 	r := MetricsCollection{
-		timeFrame: time.Unix(0, timeFrame),
-		name:      name,
-		tags:      tags,
-		aggregatedPoint: metric_drivers.AggregatedPoint{
-			Min: value,
-			Max: value,
-		},
-		flushedAt: time.Now(),
-		hash:      hash,
+		timeFrame:       time.Unix(0, timeFrame),
+		name:            name,
+		tags:            tags,
+		aggregatedPoint: metric_drivers.AggregatedPoint{},
+		flushedAt:       time.Now(),
+		hash:            hash,
+		isNew:           true,
 	}
 	return &r
 }
@@ -42,6 +41,14 @@ func newMetricsCollection(timeFrame int64, name string, value float64, valueTags
 func (mc *MetricsCollection) merge(metric Metric) {
 	mc.Lock()
 	defer mc.Unlock()
+
+	if mc.isNew {
+		mc.aggregatedPoint = metric_drivers.AggregatedPoint{
+			Min: metric.value,
+			Max: metric.value,
+		}
+		mc.isNew = false
+	}
 
 	mc.aggregatedPoint.Sum += metric.value
 	mc.aggregatedPoint.Count += 1
@@ -59,7 +66,10 @@ func (mc *MetricsCollection) merge(metric Metric) {
 func (mc *MetricsCollection) points() metric_drivers.AggregatedPoint {
 	mc.Lock()
 	defer mc.Unlock()
-	return mc.aggregatedPoint
+	tmp := mc.aggregatedPoint
+	mc.aggregatedPoint = metric_drivers.AggregatedPoint{}
+	mc.isNew = true
+	return tmp
 }
 
 func (mc *MetricsCollection) lastUpdated() time.Time {
