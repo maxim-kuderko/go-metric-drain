@@ -122,11 +122,6 @@ func (mr *MetricReporter) flush(mc *MetricsCollection) {
 	}
 }
 
-func (mr *MetricReporter) addBaseTags(tags map[string]string) map[string]string {
-
-	return tags
-}
-
 func (mr *MetricReporter) safeReadM(tf int64, metric *Metric) (*MetricsCollection, bool) {
 	mr.m.RLock()
 	defer mr.m.RUnlock()
