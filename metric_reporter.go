@@ -63,6 +63,8 @@ func (mr *MetricReporter) flushInterval(interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	for range ticker.C {
 		func() {
+			mr.tf.RLock()
+			defer mr.tf.RUnlock()
 			mr.m.RLock()
 			defer mr.m.RUnlock()
 			for _, d := range mr.mMap {
@@ -133,6 +135,7 @@ func (mr *MetricReporter) safeWriteM(tf int64, metric *Metric) (*MetricsCollecti
 		return v, false
 	}
 	mc := newMetricsCollection(tf, mr.prefix+"."+metric.name, metric.value, metric.tags, mr.baseTags, metric.hash)
+	mr.addTF(tf)
 	mr.mMap[tf][metric.hash] = mc
 	return mc, true
 }

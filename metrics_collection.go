@@ -18,7 +18,10 @@ type MetricsCollection struct {
 }
 
 func newMetricsCollection(timeFrame int64, name string, value float64, valueTags map[string]string, baseTags map[string]string, hash uint64) *MetricsCollection {
-	tags := baseTags
+	tags := map[string]string{}
+	for k, v := range baseTags {
+		tags[k] = v
+	}
 	for k, v := range valueTags {
 		tags[k] = v
 	}
