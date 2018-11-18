@@ -89,9 +89,6 @@ func (mr *MetricReporter) Metric(name string, val float64, tags map[string]strin
 	v, ok := mr.safeReadM(tf, &metric)
 	if !ok {
 		v, ok = mr.safeWriteM(tf, &metric)
-		if ok {
-			return
-		} // If !ok then some other thread created the collection in the map, and we need to merge the two
 	}
 	v.merge(metric)
 }
@@ -99,19 +96,16 @@ func (mr *MetricReporter) Metric(name string, val float64, tags map[string]strin
 func (mr *MetricReporter) Wait() {
 	mr.m.Lock()
 	wg := sync.WaitGroup{}
-	wg.Add(len(mr.mMap))
-	go func() {
-		for _, tf := range mr.mMap {
-			for _, v := range tf {
-				go func(v *MetricsCollection) {
-					defer wg.Done()
-					mr.flush(v)
-				}(v)
-			}
-
+	for _, tf := range mr.mMap {
+		for _, v := range tf {
+			wg.Add(1)
+			go func(v *MetricsCollection) {
+				defer wg.Done()
+				mr.flush(v)
+			}(v)
 		}
-	}()
 
+	}
 	wg.Wait()
 }
 
@@ -138,7 +132,7 @@ func (mr *MetricReporter) safeWriteM(tf int64, metric *Metric) (*MetricsCollecti
 	if ok {
 		return v, false
 	}
-	mc := newMetricsCollection(tf, mr.prefix+"."+metric.name, metric.value, metric.tags, mr.baseTags)
+	mc := newMetricsCollection(tf, mr.prefix+"."+metric.name, metric.value, metric.tags, mr.baseTags, metric.hash)
 	mr.mMap[tf][metric.hash] = mc
 	return mc, true
 }

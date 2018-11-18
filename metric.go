@@ -28,12 +28,13 @@ func (mc *Metric) calcHash() {
 	hasher := fnv.New64()
 	io.WriteString(hasher, mc.name)
 	if mc.tags != nil {
-		d := make([]string, 0, len(mc.tags))
-		for _, v := range mc.tags {
-			d = append(d, v)
+		d := make([]string, 0, len(mc.tags)*2)
+		for k, v := range mc.tags {
+			d = append(d, k+"+"+v)
 		}
 		sort.Strings(d)
 		io.WriteString(hasher, strings.Join(d, ""))
 	}
+
 	mc.hash = hasher.Sum64()
 }

@@ -20,7 +20,7 @@ func main() {
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop)
 
-	ldriver := metric_drivers.NewInfluxDB(``, ``, ``, ``, ``, ``, time.Minute, 2000)
+	ldriver := metric_drivers.NewInfluxDB("https://telemetry-spot-im.aivencloud.com:13088", "avnadmin", "nv7jy2s9i4elcq5b", "defaultdb", `ms`, `default_retention_policy`, time.Minute, 2000)
 
 	reporter, err := metric_reporter.NewMetricsReporter(
 		[]metric_drivers.DriverInterface{ldriver},
@@ -34,7 +34,7 @@ func main() {
 				fmt.Println(j)
 			}
 			for i := 0; i < 2000; i++ {
-				reporter.Send("mytest.metric1", 1, map[string]string{"test": strconv.Itoa(i), "test2": strconv.Itoa(j / 1000)})
+				reporter.Send("mytest.metric1", 1, map[string]string{"test": strconv.Itoa(i), "test2": strconv.Itoa(j)})
 			}
 		}
 

@@ -17,7 +17,7 @@ type MetricsCollection struct {
 	sync.Mutex
 }
 
-func newMetricsCollection(timeFrame int64, name string, value float64, valueTags map[string]string, baseTags map[string]string) *MetricsCollection {
+func newMetricsCollection(timeFrame int64, name string, value float64, valueTags map[string]string, baseTags map[string]string, hash uint64) *MetricsCollection {
 	tags := baseTags
 	for k, v := range valueTags {
 		tags[k] = v
@@ -31,6 +31,7 @@ func newMetricsCollection(timeFrame int64, name string, value float64, valueTags
 			Max: value,
 		},
 		flushedAt: time.Now(),
+		hash:      hash,
 	}
 	return &r
 }
