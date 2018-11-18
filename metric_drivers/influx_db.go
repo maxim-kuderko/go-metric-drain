@@ -2,6 +2,7 @@ package metric_drivers
 
 import (
 	"github.com/influxdata/influxdb/client/v2"
+	"math/rand"
 	"sync"
 	"time"
 )
@@ -90,7 +91,8 @@ func (ifdb *InfluxDB) buildBatch(points []pt) (client.BatchPoints, error) {
 		return nil, err
 	}
 	for _, pt := range points {
-		p, err := client.NewPoint(pt.name, pt.tags, map[string]interface{}{`count`: pt.point.Count, `sum`: pt.point.Sum, `min`: pt.point.Min, `max`: pt.point.Max, `last`: pt.point.Last, `average`: pt.point.Sum / pt.point.Count}, pt.time)
+		t := pt.time.Add(time.Millisecond * time.Duration(rand.Intn(1000)))
+		p, err := client.NewPoint(pt.name, pt.tags, map[string]interface{}{`count`: pt.point.Count, `sum`: pt.point.Sum, `min`: pt.point.Min, `max`: pt.point.Max, `last`: pt.point.Last, `average`: pt.point.Sum / pt.point.Count}, t)
 		if err != nil {
 			continue
 		}
