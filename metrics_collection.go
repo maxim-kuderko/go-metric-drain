@@ -13,6 +13,7 @@ type MetricsCollection struct {
 	hash            uint64
 	timeFrame       time.Time
 	updatedAt       time.Time
+	flushedAt       time.Time
 	sync.Mutex
 }
 
@@ -29,6 +30,7 @@ func newMetricsCollection(timeFrame int64, name string, value float64, valueTags
 			Min: value,
 			Max: value,
 		},
+		flushedAt: time.Now(),
 	}
 	return &r
 }
@@ -60,4 +62,16 @@ func (mc *MetricsCollection) lastUpdated() time.Time {
 	mc.Lock()
 	defer mc.Unlock()
 	return mc.updatedAt
+}
+
+func (mc *MetricsCollection) lastFlushed() time.Time {
+	mc.Lock()
+	defer mc.Unlock()
+	return mc.flushedAt
+}
+
+func (mc *MetricsCollection) resetFlushed() {
+	mc.Lock()
+	defer mc.Unlock()
+	mc.flushedAt = time.Now()
 }

@@ -67,7 +67,9 @@ func (mr *MetricReporter) flushInterval(interval time.Duration) {
 			defer mr.m.RUnlock()
 			for _, d := range mr.mMap {
 				for _, mc := range d {
-					mr.flush(mc)
+					if mc.lastFlushed().Add(interval).Before(time.Now()) {
+						mr.flush(mc)
+					}
 				}
 			}
 		}()
@@ -114,6 +116,7 @@ func (mr *MetricReporter) Wait() {
 }
 
 func (mr *MetricReporter) flush(mc *MetricsCollection) {
+	mc.resetFlushed()
 	for _, d := range mr.metricDrivers {
 		d.Send(mc.hash, mc.name, mc.points(), mc.tags, mc.timeFrame)
 	}

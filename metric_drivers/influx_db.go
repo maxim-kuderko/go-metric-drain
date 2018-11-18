@@ -34,7 +34,7 @@ func (ifdb *InfluxDB) flushInterval(interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	for range ticker.C {
 		ifdb.s.Lock()
-		if len(ifdb.cache) > 0 && ifdb.lastSend.Add(interval).After(time.Now()) {
+		if len(ifdb.cache) > 0 && ifdb.lastSend.Add(interval).Before(time.Now()) {
 			ifdb.flush()
 		}
 		ifdb.s.Unlock()
