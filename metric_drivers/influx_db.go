@@ -1,25 +1,33 @@
 package metric_drivers
 
 import (
-	"github.com/influxdata/influxdb/client/v2"
+	"context"
+	influxdb "github.com/influxdata/influxdb-client-go"
+	"log"
 	"math/rand"
+	"net/http"
 	"sync"
 	"time"
 )
 
 type InfluxDB struct {
-	url, username, password string
-	database                string
-	precision               string
-	retention               string
-	maxSize                 int
-	cache                   []pt
-	lastSend                time.Time
-	s                       sync.Mutex
+	bucket, org string
+	influx      *influxdb.Client
+	maxSize     int
+	cache       []pt
+	lastSend    time.Time
+	s           sync.Mutex
 }
 
-func NewInfluxDB(url, username, password, database, precision, retention string, flushInterval time.Duration, maxSize int) *InfluxDB {
-	ifdb := &InfluxDB{url: url, username: username, password: password, precision: precision, database: database, retention: retention, cache: make([]pt, 0, maxSize), maxSize: maxSize, lastSend: time.Now()}
+func NewInfluxDB(url, token, bucket, org string, flushInterval time.Duration, maxSize int) *InfluxDB {
+	influx, err := influxdb.New(url, token, influxdb.WithHTTPClient(&http.Client{
+		Timeout:   time.Second * 10,
+		Transport: http.DefaultTransport,
+	}))
+	if err != nil {
+		log.Panic(err)
+	}
+	ifdb := &InfluxDB{influx: influx, bucket: bucket, org: org, cache: make([]pt, 0, maxSize), maxSize: maxSize, lastSend: time.Now()}
 	go ifdb.flushInterval(flushInterval)
 	return ifdb
 }
@@ -66,37 +74,24 @@ func (ifdb *InfluxDB) flush() {
 	if err != nil {
 		return
 	}
-	go func(bp client.BatchPoints) {
-		c, err := client.NewHTTPClient(client.HTTPConfig{
-			Addr:     ifdb.url,
-			Username: ifdb.username,
-			Password: ifdb.password,
-		})
-		if err != nil {
-			return
+	go func(bp []influxdb.Metric) {
+		if _, err := ifdb.influx.Write(context.Background(), ifdb.bucket, ifdb.org, bp...); err != nil {
+			log.Println(err)
 		}
-		defer c.Close()
-		c.Write(bp)
 	}(batchPoints)
 
 }
 
-func (ifdb *InfluxDB) buildBatch(points []pt) (client.BatchPoints, error) {
-	bp, err := client.NewBatchPoints(client.BatchPointsConfig{
-		Database:        ifdb.database,
-		Precision:       ifdb.precision,
-		RetentionPolicy: ifdb.retention,
-	})
-	if err != nil {
-		return nil, err
-	}
+func (ifdb *InfluxDB) buildBatch(points []pt) ([]influxdb.Metric, error) {
+	bp := make([]influxdb.Metric, 0, len(points))
 	for _, pt := range points {
 		t := pt.time.Add(time.Millisecond * time.Duration(rand.Intn(1000)))
-		p, err := client.NewPoint(pt.name, pt.tags, map[string]interface{}{`count`: pt.point.Count, `sum`: pt.point.Sum, `min`: pt.point.Min, `max`: pt.point.Max, `last`: pt.point.Last, `average`: pt.point.Sum / pt.point.Count}, t)
-		if err != nil {
-			continue
-		}
-		bp.AddPoint(p)
+		p := influxdb.NewRowMetric(
+			map[string]interface{}{`count`: pt.point.Count, `sum`: pt.point.Sum, `min`: pt.point.Min, `max`: pt.point.Max, `last`: pt.point.Last, `average`: pt.point.Sum / pt.point.Count},
+			pt.name,
+			pt.tags,
+			t)
+		bp = append(bp, p)
 
 	}
 
